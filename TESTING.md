@@ -1,5 +1,9 @@
 # Validation status
 
+## Approved owner listings — 12 September 2026
+
+The SQLite-backed handler suite passes approval-to-catalog publication, owner pricing/photo mapping, hidden pending drafts, other-account photo access only while approved, simulated owner-venue holds and confirmation, removal after editing, stale review rejection, atomic approval rechecks, unchanged historical quotes, and republication without duplicates or calendar loss. TypeScript and production build are required separately. Browser interaction remains unverified; no live data is modified by the tests.
+
 ## Confirmation navigation repair — 12 September 2026
 
 Replaced the completed-checkout redirect with a stable already-confirmed page to prevent a browser Back redirect loop. Receipt navigation, booking list links and global header/footer navigation now use native anchors. Confirmation pages provide explicit home and bookings links above and below the quote. TypeScript and production build are the validation gates; hosted browser interaction remains unverified.

@@ -2,22 +2,22 @@ import {env} from 'cloudflare:workers';
 import {z} from 'zod';
 import {db} from '@/lib/db';
 import {calendarSnapshot} from '@/lib/calendar';
-import {apiUser,apiError,isAdmin,noStore,readBody,catalogPricing,venuePricing} from '@/lib/demo-server';
+import {apiUser,apiError,isAdmin,noStore,readBody,catalogPricing,venuePricing,venueCatalog} from '@/lib/demo-server';
 import {venues,venueTypes,indiaToday} from '@/lib/venues';
-import {dateSchema,selectionSchema,makeQuote,HOLD_SECONDS,holdSQL,confirmInsertSQL,confirmSlotSQL,pricingSchema,validDate} from '@/lib/booking';
+import {dateSchema,selectionSchema,makeQuote,HOLD_SECONDS,holdSQL,ownerHoldSQL,confirmInsertSQL,confirmSlotSQL,pricingSchema,validDate} from '@/lib/booking';
 export const dynamic='force-dynamic';
 const json=(data:unknown,status=200)=>Response.json(data,{status,headers:noStore});
-const draftSchema=z.object({id:z.string().uuid(),name:z.string().trim().min(3).max(100),locality:z.string().trim().min(2).max(100),address:z.string().trim().min(8).max(400),type:z.string().refine(v=>venueTypes.slice(1).includes(v)),capacity:z.number().int().min(1).max(2000),description:z.string().trim().min(40).max(3000),pricing:pricingSchema,images:z.array(z.string().uuid()).max(6),rightsConfirmed:z.literal(true),submit:z.boolean()}).strict();
+import {draftSchema} from '@/lib/owner-venue';
 function bucket(){const b=(env as unknown as {BUCKET?:R2Bucket}).BUCKET;if(!b)throw new Error('Storage unavailable');return b;}
 export async function GET(request:Request,{params}:{params:Promise<{action:string}>}){
  try{const user=await apiUser();const {action}=await params;const url=new URL(request.url);const database=db();const now=Math.floor(Date.now()/1000);
   if(action==='session')return json({admin:isAdmin(user),name:user.displayName});
-  if(action==='catalog')return json({pricing:await catalogPricing()});
+  if(action==='catalog')return json(await venueCatalog());
   if(action==='calendar'){
    const slug=url.searchParams.get('venue');const month=url.searchParams.get('month');const date=url.searchParams.get('date');
    if(date){if(!dateSchema.safeParse(date).success)return json({error:'Choose a date in the next 12 months.'},400);const rows=await database.prepare("SELECT venue_slug FROM demo_slots WHERE event_date=? AND (status='booked' OR (status='held' AND expires_at>?))").bind(date,now).all();return json({unavailable:rows.results.map(r=>r.venue_slug),serverTime:now});}
-   if(!venues.some(v=>v.slug===slug)||!month||!/^\d{4}-\d{2}$/.test(month)||!validDate(month+'-01'))return json({error:'Invalid calendar request'},400);
-   return json(await calendarSnapshot(slug!,month,user.userId));
+   if(!slug||!month||!/^\d{4}-\d{2}$/.test(month)||!validDate(month+'-01'))return json({error:'Invalid calendar request'},400);
+   await venuePricing(slug);return json(await calendarSnapshot(slug,month,user.userId));
   }
   if(action==='bookings'){const rows=await database.prepare('SELECT id,venue_slug,event_date,quote_json,created_at FROM demo_bookings WHERE user_id=? ORDER BY created_at DESC LIMIT 100').bind(user.userId).all();return json({bookings:rows.results.map(r=>({...r,quote:JSON.parse(String(r.quote_json)),quote_json:undefined}))});}
   if(action==='drafts'||action==='admin'){
@@ -27,7 +27,8 @@ export async function GET(request:Request,{params}:{params:Promise<{action:strin
    return json({drafts:rows.results.map(r=>({...r,data:JSON.parse(String(r.data_json)),data_json:undefined})),bookings:bookings?.results.map(r=>({...r,quote:JSON.parse(String(r.quote_json)),quote_json:undefined})),pricing:isAdmin(user)?await catalogPricing():undefined});
   }
   if(action==='image'){
-   const id=url.searchParams.get('id');if(!id||!z.string().uuid().safeParse(id).success)throw new Error('NOT_FOUND');const record=await database.prepare('SELECT owner_id,object_key,content_type FROM owner_images WHERE id=?').bind(id).first<{owner_id:string;object_key:string;content_type:string}>();if(!record||(record.owner_id!==user.userId&&!isAdmin(user)))throw new Error('NOT_FOUND');const image=await bucket().get(record.object_key);if(!image)throw new Error('NOT_FOUND');return new Response(image.body,{headers:{...noStore,'Content-Type':record.content_type,'X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'"}});
+   const id=url.searchParams.get('id');if(!id||!z.string().uuid().safeParse(id).success)throw new Error('NOT_FOUND');const record=await database.prepare('SELECT owner_id,object_key,content_type FROM owner_images WHERE id=?').bind(id).first<{owner_id:string;object_key:string;content_type:string}>();if(!record)throw new Error('NOT_FOUND');
+   if(record.owner_id!==user.userId&&!isAdmin(user)){const approved=await database.prepare("SELECT d.id FROM owner_drafts d,json_each(d.data_json,'$.images') image WHERE d.status='approved_for_demo' AND d.owner_id=? AND image.value=? LIMIT 1").bind(record.owner_id,id).first();if(!approved)throw new Error('NOT_FOUND');}const image=await bucket().get(record.object_key);if(!image)throw new Error('NOT_FOUND');return new Response(image.body,{headers:{...noStore,'Content-Type':record.content_type,'X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'"}});
   }
   return json({error:'Not found'},404);
  }catch(error){return apiError(error);}
@@ -45,9 +46,9 @@ export async function POST(request:Request,{params}:{params:Promise<{action:stri
   }
   let body:unknown;try{body=await readBody(request,formFlow);if(formFlow){const f=body as Record<string,string>;body=action==='hold'?{venueSlug:f.venueSlug,date:f.date,guests:Number(f.guests),packageId:f.packageId,addons:f.addons?f.addons.split(','):[]}:action==='confirm'?{holdId:f.holdId,acknowledgeDemo:f.acknowledgeDemo==='yes'}:{holdId:f.holdId};}}catch{return reply({error:'Invalid or oversized JSON request'},400);}
   if(action==='hold'){
-   const parsed=selectionSchema.safeParse(body);if(!parsed.success)return reply({error:parsed.error.issues[0].message},400);const s=parsed.data;const {venue,pricing}=await venuePricing(s.venueSlug);if(s.guests>venue.capacity)return reply({error:'Guest count exceeds venue capacity.'},400);
+   const parsed=selectionSchema.safeParse(body);if(!parsed.success)return reply({error:parsed.error.issues[0].message},400);const s=parsed.data;const {venue,pricing,approval}=await venuePricing(s.venueSlug);if(s.guests>venue.capacity)return reply({error:'Guest count exceeds venue capacity.'},400);
    const quote=makeQuote(venue,pricing,s);const id=crypto.randomUUID();const expiresAt=now+HOLD_SECONDS;
-   const result=await database.prepare(holdSQL).bind(venue.slug,s.date,id,user.userId,expiresAt,JSON.stringify(quote),now).first();if(!result)return reply({error:'This date was just held or booked. Choose another available date.'},409);return reply({id,expiresAt,quote,serverTime:now},201);
+   const args=[venue.slug,s.date,id,user.userId,expiresAt,JSON.stringify(quote),...(approval?[approval.id,approval.dataJson]:[]),now];const result=await database.prepare(approval?ownerHoldSQL:holdSQL).bind(...args).first();if(!result)return reply({error:'This date was just held or booked. Choose another available date.'},409);return reply({id,expiresAt,quote,serverTime:now},201);
   }
   if(action==='confirm'||action==='release'){
    const parsed=z.object({holdId:z.string().uuid(),...(action==='confirm'?{acknowledgeDemo:z.literal(true)}:{})}).strict().safeParse(body);if(!parsed.success)return reply({error:'Invalid hold request'},400);const holdId=parsed.data.holdId;
@@ -67,8 +68,8 @@ export async function POST(request:Request,{params}:{params:Promise<{action:stri
    const stamp=new Date().toISOString();const saved=await database.prepare("INSERT INTO owner_drafts (id,owner_id,data_json,status,review_note,created_at,updated_at) VALUES (?,?,?,?,'',?,?) ON CONFLICT(id) DO UPDATE SET data_json=excluded.data_json,status=excluded.status,review_note='',updated_at=excluded.updated_at WHERE owner_drafts.owner_id=excluded.owner_id RETURNING id").bind(d.id,user.userId,JSON.stringify(d),d.submit?'pending_review':'draft',stamp,stamp).first();if(!saved)throw new Error('FORBIDDEN');return reply({id:d.id,status:d.submit?'pending_review':'draft'});
   }
   if(action==='review'){
-   if(!isAdmin(user))throw new Error('FORBIDDEN');const parsed=z.object({id:z.string().uuid(),status:z.enum(['approved_for_demo','changes_requested']),note:z.string().trim().min(5).max(1000)}).strict().safeParse(body);if(!parsed.success)return reply({error:'Add a review note (5-1000 characters).'},400);
-   const r=await database.prepare("UPDATE owner_drafts SET status=?,review_note=?,updated_at=? WHERE id=? AND status='pending_review' RETURNING id").bind(parsed.data.status,parsed.data.note,new Date().toISOString(),parsed.data.id).first();if(!r)return reply({error:'This draft is no longer awaiting review. Refresh the workspace.'},409);return reply({reviewed:true});
+   if(!isAdmin(user))throw new Error('FORBIDDEN');const parsed=z.object({id:z.string().uuid(),status:z.enum(['approved_for_demo','changes_requested']),note:z.string().trim().min(5).max(1000),expectedUpdatedAt:z.string().min(1).max(64)}).strict().safeParse(body);if(!parsed.success)return reply({error:'Add a review note (5-1000 characters).'},400);
+   const r=await database.prepare("UPDATE owner_drafts SET status=?,review_note=?,updated_at=? WHERE id=? AND status='pending_review' AND updated_at=? RETURNING id").bind(parsed.data.status,parsed.data.note,new Date().toISOString(),parsed.data.id,parsed.data.expectedUpdatedAt).first();if(!r)return reply({error:'This draft is no longer awaiting review. Refresh the workspace.'},409);return reply({reviewed:true});
   }
   return reply({error:'Not found'},404);
  }catch(error){return apiError(error);}

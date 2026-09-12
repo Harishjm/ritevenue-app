@@ -1,8 +1,17 @@
 # RiteVenue
 
-Bengaluru venue booking prototype: 20 fictional venues, shared availability, two-hour holds, simulated advance payments, locked itemized quotes, owner drafts and private photo uploads, and admin review.
+Bengaluru venue booking prototype: 20 fictional venues, shared availability, two-hour holds, simulated advance payments, locked itemized quotes, owner drafts and private photo uploads, and admin review. Approved owner venues now appear alongside samples in the private catalog, with their supplied photos, prices and simulated booking calendar.
 
 **Demo only:** no real reservations, payment collection, verified reviews or Google Places calls. The hosted demonstration remains private and noindex.
+
+## Owner submission to listing
+
+1. Open `/owner`, add details, pricing and photos, then submit for review.
+2. Open `/admin` as the configured administrator and choose **Approve & add to venues**.
+3. Use **View listed venue & calendar** or return to the home catalog. Open catalog tabs refresh within 10 seconds.
+4. Saving an edit hides the listing until it is approved again. Existing bookings and locked quotes remain saved.
+
+All listings and photos remain behind the private Site access policy. Approval does not enable real payments or publish the site publicly.
 
 ## Source and hosting
 
@@ -73,6 +82,8 @@ The original source passed these checks in the managed environment. Clean-clone 
 - `components/`: search, calendar, owner workspace and UI components.
 - `lib/venues.ts`: the 20 fictional venue fixtures.
 - `lib/booking.ts`: pricing, validation and atomic booking SQL.
+- `lib/owner-venue.ts`: owner submission validation and listing mapping.
+- `lib/demo-server.ts`: approved catalog and pricing resolution.
 - `lib/calendar.ts`: shared calendar snapshots.
 - `db/schema.ts` and `drizzle/`: database schema and migrations.
 - `tests/prototype.mjs`: current booking regression checks.

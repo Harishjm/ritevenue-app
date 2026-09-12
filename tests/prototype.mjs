@@ -5,7 +5,7 @@ import {createRequire} from 'node:module';
 import {DatabaseSync} from 'node:sqlite';
 import assert from 'node:assert/strict';
 const root=resolve('.sites-runtime/prototype-tests');mkdirSync(root,{recursive:true});writeFileSync(resolve(root,'package.json'),'{"type":"commonjs"}');
-for(const file of ['lib/venues.ts','lib/booking.ts','lib/db.ts','lib/demo-server.ts','lib/calendar.ts','app/api/demo/[action]/route.ts']){
+for(const file of ['lib/venues.ts','lib/booking.ts','lib/owner-venue.ts','lib/db.ts','lib/demo-server.ts','lib/calendar.ts','app/api/demo/[action]/route.ts']){
  let source=readFileSync(file,'utf8').replace("import {env} from 'cloudflare:workers';",'const env=globalThis.__testEnv;');
  if(file==='lib/demo-server.ts')source=source.replace("import {getChatGPTUser,type ChatGPTUser} from '@/app/chatgpt-auth';",'type ChatGPTUser=any;async function getChatGPTUser(){return globalThis.__testUser;}');
  const dest=resolve(root,file.replace(/\.ts$/,'.js'));mkdirSync(dirname(dest),{recursive:true});
@@ -37,7 +37,54 @@ const fake=new Request(origin+'/api/demo/images',{method:'POST',headers:{Origin:
 // Fixture bytes exercise upload validation/storage; no real image or external call is needed.
 const bytes=new Uint8Array([255,216,255,224,0,0,0,0,0,0,0,0,0]);const upload=await api.POST(new Request(origin+'/api/demo/images',{method:'POST',headers:{Origin:origin,'Content-Type':'image/jpeg'},body:bytes}),{params:Promise.resolve({action:'images'})});assert.equal(upload.status,201);const image=await upload.json();assert.equal((await post('drafts',{...draft,images:[image.id],submit:true})).status,200);
 globalThis.__testUser={userId:'couple-b',email:'other@example.test'};assert.equal((await post('drafts',draft)).status,403);assert.equal((await get('image','?id='+image.id)).status,404);assert.equal((await get('admin')).status,403);assert.equal((await (await get('drafts')).json()).drafts.length,0);
-globalThis.__testUser={userId:'admin',email:'admin@example.test'};assert.equal((await get('image','?id='+image.id)).status,200);assert.equal((await post('review',{id,status:'approved_for_demo',note:'Reviewed for private demo only.'})).status,200);assert.equal(sql.prepare('SELECT status FROM owner_drafts WHERE id=?').get(id).status,'approved_for_demo');
+assert.equal((await (await get('catalog')).json()).venues.length,20);
+assert.equal((await get('calendar','?venue=owner-'+id+'&month='+indiaToday().slice(0,7))).status,404);
+assert.equal((await post('hold',{...selection,venueSlug:'owner-'+id})).status,404);
+assert.equal((await post('review',{id,status:'approved_for_demo',note:'Not the admin',expectedUpdatedAt:'stale'})).status,403);
+globalThis.__testUser={userId:'admin',email:'admin@example.test'};assert.equal((await get('image','?id='+image.id)).status,200);assert.equal((await post('review',{id,status:'approved_for_demo',note:'Reviewed for private demo only.',expectedUpdatedAt:sql.prepare('SELECT updated_at FROM owner_drafts WHERE id=?').get(id).updated_at})).status,200);assert.equal(sql.prepare('SELECT status FROM owner_drafts WHERE id=?').get(id).status,'approved_for_demo');
+// Approval publishes one searchable listing with owner pricing and scoped photos.
+const revision=sql.prepare('SELECT updated_at FROM owner_drafts WHERE id=?').get(id).updated_at;
+assert.equal((await post('review',{id,status:'approved_for_demo',note:'Repeat review is stale',expectedUpdatedAt:revision})).status,409);
+globalThis.__testUser={userId:'couple-b',email:'other@example.test'};
+const published=await (await get('catalog')).json();
+assert.equal(published.venues.length,21);
+const ownerVenue=published.venues.find(v=>v.slug==='owner-'+id);
+assert.equal(ownerVenue.name,draft.name);assert.equal(ownerVenue.area,draft.locality);
+assert.equal(ownerVenue.source,'owner');assert.equal(ownerVenue.images[0],'/api/demo/image?id='+image.id);
+assert.deepEqual(published.pricing[ownerVenue.slug],updated);
+assert.ok(!JSON.stringify(published).includes('owner_id'));
+assert.equal((await get('image','?id='+image.id)).status,200);
+const ownerSelection={...selection,venueSlug:ownerVenue.slug};
+const ownerHold=await (await post('hold',ownerSelection)).json();
+assert.ok(ownerHold.id);assert.equal(ownerHold.quote.venueSource,'owner');
+assert.equal(ownerHold.quote.items[0].amount,updated.rent);
+assert.equal((await post('hold',ownerSelection)).status,409);
+const visibleCalendar=await (await get('calendar','?venue='+ownerVenue.slug+'&month='+indiaToday().slice(0,7))).json();
+assert.equal(visibleCalendar.days[0].status,'held');
+// Saving an edit removes the listing and its public-to-signed-in photo access.
+const priorPayload=sql.prepare('SELECT data_json FROM owner_drafts WHERE id=?').get(id).data_json;
+globalThis.__testUser={userId:'couple-a',email:'couple@example.test'};
+const amended={...draft,images:[image.id],name:'Updated owner venue',pricing:{...updated,rent:1234500},submit:true};
+assert.equal((await post('drafts',amended)).status,200);
+assert.equal((await (await get('catalog')).json()).venues.length,20);
+const raced=sql.prepare(domain.ownerHoldSQL).get(ownerVenue.slug,domain.lastBookableDate(),crypto.randomUUID(),'couple-b',Math.floor(Date.now()/1000)+7200,JSON.stringify(ownerHold.quote),id,priorPayload,Math.floor(Date.now()/1000));
+assert.equal(raced,undefined);
+globalThis.__testUser={userId:'couple-b',email:'other@example.test'};
+assert.equal((await get('image','?id='+image.id)).status,404);
+assert.equal((await post('hold',{...ownerSelection,date:domain.lastBookableDate()})).status,404);
+// The customer's existing hold can complete without changing its saved quote.
+const ownerConfirmed=await (await post('confirm',{holdId:ownerHold.id,acknowledgeDemo:true})).json();
+assert.ok(ownerConfirmed.id);
+assert.equal(JSON.parse(sql.prepare('SELECT quote_json FROM demo_bookings WHERE id=?').get(ownerConfirmed.id).quote_json).total,ownerHold.quote.total);
+globalThis.__testUser={userId:'admin',email:'admin@example.test'};
+assert.equal((await post('review',{id,status:'approved_for_demo',note:'Stale review must not publish',expectedUpdatedAt:'old-revision'})).status,409);
+const freshRevision=sql.prepare('SELECT updated_at FROM owner_drafts WHERE id=?').get(id).updated_at;
+assert.equal((await post('review',{id,status:'approved_for_demo',note:'Approved revised listing',expectedUpdatedAt:freshRevision})).status,200);
+const republished=await (await get('catalog')).json();
+assert.equal(republished.venues.filter(v=>v.slug===ownerVenue.slug).length,1);
+assert.equal(republished.venues.find(v=>v.slug===ownerVenue.slug).name,amended.name);
+assert.equal(republished.pricing[ownerVenue.slug].rent,1234500);
+assert.equal((await (await get('calendar','?venue='+ownerVenue.slug+'&month='+indiaToday().slice(0,7))).json()).days[0].status,'booked');
 // Native form checkout is independent of client hydration and uses the same transaction logic.
 async function formPost(action,data){return api.POST(new Request(origin+'/api/demo/'+action,{method:'POST',headers:{Origin:origin,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(data)}),{params:Promise.resolve({action})});}
 globalThis.__testUser={userId:'couple-a',email:'couple@example.test'};
@@ -45,4 +92,4 @@ const formStart=await formPost('start-checkout',{venueSlug:venues[4].slug,date:i
 const formConfirm=await formPost('complete-checkout',{holdId:formHold,acknowledgeDemo:'yes'});assert.equal(formConfirm.status,303);assert.ok(new URL(formConfirm.headers.get('location')).pathname.startsWith('/bookings/'));assert.equal((await formPost('complete-checkout',{holdId:formHold,acknowledgeDemo:'yes'})).headers.get('location'),formConfirm.headers.get('location'));
 const invalidForm=await formPost('start-checkout',{venueSlug:venues[4].slug,date:'invalid',guests:'120',packageId:'full-day',addons:''});assert.equal(invalidForm.status,303);assert.ok(invalidForm.headers.get('location').includes('invalid_input'));
 globalThis.__testUser=null;assert.equal((await get('calendar','?date='+indiaToday())).status,401);assert.equal((await post('hold',selection)).status,401);
-console.log('Passed: 20 venues, pricing integrity, input validation, competing holds, expiry/reclaim, idempotent confirmation, immutable quotes, cross-account isolation, admin restrictions, private uploads and draft moderation. No external calls made.');
+console.log('Passed: 20 venues, pricing integrity, input validation, competing holds, expiry/reclaim, idempotent confirmation, immutable quotes, cross-account isolation, admin restrictions, private uploads, approval-to-catalog, owner venue booking, edit withdrawal, stale review protection and draft moderation. No external calls made.');
