@@ -1,0 +1,5 @@
+import {db} from './db';
+import type {Quote} from './booking';
+export type CalendarDay={date:string;status:'held'|'booked';expiresAt:number;ownHold?:{id:string;quote:Quote}};
+export type CalendarSnapshot={month:string;serverTime:number;days:CalendarDay[]};
+export async function calendarSnapshot(slug:string,month:string,userId:string):Promise<CalendarSnapshot>{const now=Math.floor(Date.now()/1000);const rows=await db().prepare("SELECT event_date,status,expires_at,user_id,hold_id,quote_json FROM demo_slots WHERE venue_slug=? AND event_date>=? AND event_date<=? AND (status='booked' OR (status='held' AND expires_at>?))").bind(slug,month+'-01',month+'-31',now).all<{event_date:string;status:'held'|'booked';expires_at:number;user_id:string;hold_id:string;quote_json:string}>();return {month,serverTime:now,days:rows.results.map(r=>({date:r.event_date,status:r.status,expiresAt:r.expires_at,...(r.status==='held'&&r.user_id===userId?{ownHold:{id:r.hold_id,quote:JSON.parse(r.quote_json)}}:{})}))};}

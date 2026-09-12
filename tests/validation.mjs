@@ -1,0 +1,16 @@
+import ts from 'typescript';
+import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
+import {createRequire} from 'node:module';
+import assert from 'node:assert/strict';
+const dir=new URL('../.sites-runtime/test-modules/',import.meta.url);mkdirSync(dir,{recursive:true});writeFileSync(new URL('package.json',dir),'{"type":"commonjs"}');
+for(const name of ['venues','validation'])writeFileSync(new URL(name+'.js',dir),ts.transpileModule(readFileSync(new URL('../lib/'+name+'.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText);
+const require=createRequire(new URL('entry.js',dir));const {requestSchema,applicationSchema,sameOrigin}=require('./validation.js');const {filterVenues,indiaToday}=require('./venues.js');
+const base={requestKey:'b5da2f2b-f1b1-44f4-913b-4cd2737ae2ef',venueSlug:'the-jacaranda-lawn',date:indiaToday(),guests:200,occasion:'Wedding',name:'Test Person',email:'test@example.com',notes:'',website:'',consent:true};
+assert.equal(requestSchema.safeParse(base).success,true);
+for(const patch of [{date:'2020-01-01'},{date:'2030-02-30'},{date:'bad'},{guests:601},{guests:1.5},{guests:0},{occasion:'Birthday'},{venueSlug:'missing'},{email:'invalid'},{consent:false},{website:'spam'},{notes:'a'.repeat(1001)}])assert.equal(requestSchema.safeParse({...base,...patch}).success,false,JSON.stringify(patch));
+assert.equal(applicationSchema.safeParse({requestKey:base.requestKey,venueName:'Test Hall',city:'Bengaluru',contactName:'Test Owner',email:'owner@example.com',capacity:300,consent:true,website:''}).success,true);
+assert.equal(applicationSchema.safeParse({requestKey:base.requestKey,venueName:'Test Hall',city:'Mumbai',contactName:'Test Owner',email:'owner@example.com',capacity:300,consent:true}).success,false);
+const filters={city:'Bengaluru',occasion:'All occasions',guests:0,budget:1000000,type:'All venues',query:'',sort:'price-low'};
+assert.deepEqual(filterVenues(filters).map(v=>v.price),[35000,125000]);assert.equal(filterVenues({...filters,guests:601}).length,0);assert.equal(filterVenues({...filters,query:'Indiranagar'}).length,1);assert.equal(filterVenues({...filters,occasion:'Wedding',budget:50000}).length,0);
+assert.equal(sameOrigin(new Request('https://example.com/api',{headers:{origin:'https://evil.test'}})),false);assert.equal(sameOrigin(new Request('https://example.com/api',{headers:{origin:'https://example.com'}})),true);
+console.log('21 validation, search and origin checks passed.');

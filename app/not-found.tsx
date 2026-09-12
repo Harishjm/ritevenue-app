@@ -1,0 +1,1 @@
+import Link from 'next/link';export default function NotFound(){return <main className="content-page narrow"><h1>This page isn’t here.</h1><p>The venue or request could not be found.</p><Link className="primary" href="/">Explore venues</Link></main>}

@@ -1,0 +1,3 @@
+import {money} from '@/lib/venues';
+import type {Quote} from '@/lib/booking';
+export default function QuoteBreakdown({quote}:{quote:Quote}){return <div className="quote-breakdown"><dl>{quote.items.map(i=><div key={i.label}><dt>{i.label}</dt><dd>{i.amount?money(i.amount/100):'Included'}</dd></div>)}<div><dt>Illustrative tax (18%)</dt><dd>{money(quote.tax/100)}</dd></div><div className="quote-total"><dt>Total price</dt><dd>{money(quote.total/100)}</dd></div><div className="quote-advance"><dt>25% advance (simulated)</dt><dd>{money(quote.advance/100)}</dd></div><div><dt>Remaining, direct to owner</dt><dd>{money(quote.balance/100)}</dd></div></dl><p className="muted">All mandatory charges shown. Tax is illustrative demo data. No money is collected.</p></div>}

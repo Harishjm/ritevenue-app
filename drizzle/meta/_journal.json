@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1789033387748,
+      "tag": "0000_safe_yellow_claw",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1789105314086,
+      "tag": "0001_brainy_reavers",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789137535033,
+      "tag": "0002_dark_metal_master",
+      "breakpoints": true
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+import Link from 'next/link';
+import {notFound} from 'next/navigation';
+import {db} from '@/lib/db';
+import {venues} from '@/lib/venues';
+export const dynamic='force-dynamic';
+export const metadata={title:'Your test request',robots:{index:false,follow:false}};
+export default async function Receipt({params}:{params:Promise<{id:string}>}){const {id}=await params;if(!/^[0-9a-f-]{36}$/.test(id))notFound();let row:{venue_slug:string;event_date:string;guests:number;occasion:string;status:string}|null;try{row=await db().prepare('SELECT venue_slug,event_date,guests,occasion,status FROM requests WHERE id=?').bind(id).first();}catch{return <main className="content-page narrow"><h1>Receipt temporarily unavailable</h1><p>Please reload this page in a moment. Keep this link to revisit your request.</p></main>;}if(!row)notFound();const v=venues.find(v=>v.slug===row.venue_slug);return <main className="content-page narrow"><div className="success-box"><span className="tag">TEST REQUEST SAVED</span><h1 style={{fontSize:38,marginTop:20}}>One step closer to your celebration.</h1><p>This is a saved demo request. No booking is confirmed, no venue has been contacted and no payment has been taken.</p><h2>{v?.name||'Sample venue'}</h2><p>{row.event_date} · {row.guests} guests · {row.occasion}</p><p className="muted">Request reference: <code>{id}</code></p><p className="muted">Anyone with this receipt link can see these event details. Contact information is never shown here.</p><Link href="/" className="primary">Explore more venues</Link></div></main>}
