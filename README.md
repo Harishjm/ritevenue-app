@@ -4,6 +4,19 @@ Bengaluru venue booking prototype: 20 fictional venues, shared availability, two
 
 **Demo only:** no real reservations, payment collection, verified reviews or Google Places calls. The hosted demonstration remains private and noindex.
 
+## Booking packages
+
+New bookings use a **5% advance**, with the remaining balance shown as payable directly to the venue owner. Payments are simulated.
+
+- **Standard Marriage — 24 Hours:** Day 1 at 4 PM to Day 2 at 4 PM.
+- **Full Day:** 8 AM–10 PM.
+- **Half Day Morning:** 7 AM–2 PM.
+- **Half Day Evening:** 4 PM–11 PM.
+
+Each package supports 0–4 extra hours after its end time. Package rentals and the hourly rate are editable. Starter demo defaults use the full-day rental for 24 hours, half that rental for each half-day, and ₹2,000 per extra hour. All mandatory charges and sample tax remain itemized. Morning and evening bookings can share a date; extra hours may block the later package.
+
+Access periods cannot overlap, including on adjacent dates. Previously held and confirmed quotes keep their original agreed terms.
+
 ## Owner submission to listing
 
 1. Open `/owner`, add details, pricing and photos, then submit for review.

@@ -1,5 +1,9 @@
 # Validation status
 
+## Five-percent advance and overnight access
+
+The handler suite covers 5% advance rounding, exact 4 PM–4 PM next-day timestamps, four distinct package rentals, two non-overlapping half-day bookings on one date, and extra-hour overlap blocking in either acquisition order, competing holds across dates, package-specific calendar states, search availability, month-boundary overlaps, expired holds and original hours/25% amounts on legacy quotes. The existing booking and owner-publication tests are retained. Browser QA remains unverified.
+
 ## Approved owner listings — 12 September 2026
 
 The SQLite-backed handler suite passes approval-to-catalog publication, owner pricing/photo mapping, hidden pending drafts, other-account photo access only while approved, simulated owner-venue holds and confirmation, removal after editing, stale review rejection, atomic approval rechecks, unchanged historical quotes, and republication without duplicates or calendar loss. TypeScript and production build are required separately. Browser interaction remains unverified; no live data is modified by the tests.

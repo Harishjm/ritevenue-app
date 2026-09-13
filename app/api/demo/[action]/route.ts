@@ -1,10 +1,10 @@
 import {env} from 'cloudflare:workers';
 import {z} from 'zod';
 import {db} from '@/lib/db';
-import {calendarSnapshot} from '@/lib/calendar';
+import {calendarSnapshot,unavailableVenues} from '@/lib/calendar';
 import {apiUser,apiError,isAdmin,noStore,readBody,catalogPricing,venuePricing,venueCatalog} from '@/lib/demo-server';
 import {venues,venueTypes,indiaToday} from '@/lib/venues';
-import {dateSchema,selectionSchema,makeQuote,HOLD_SECONDS,holdSQL,ownerHoldSQL,confirmInsertSQL,confirmSlotSQL,pricingSchema,validDate} from '@/lib/booking';
+import {dateSchema,selectionSchema,packageIdSchema,extraHoursSchema,makeQuote,HOLD_SECONDS,holdSQL,ownerHoldSQL,holdBindings,confirmInsertSQL,confirmSlotSQL,pricingSchema,validDate} from '@/lib/booking';
 export const dynamic='force-dynamic';
 const json=(data:unknown,status=200)=>Response.json(data,{status,headers:noStore});
 import {draftSchema} from '@/lib/owner-venue';
@@ -14,10 +14,10 @@ export async function GET(request:Request,{params}:{params:Promise<{action:strin
   if(action==='session')return json({admin:isAdmin(user),name:user.displayName});
   if(action==='catalog')return json(await venueCatalog());
   if(action==='calendar'){
-   const slug=url.searchParams.get('venue');const month=url.searchParams.get('month');const date=url.searchParams.get('date');
-   if(date){if(!dateSchema.safeParse(date).success)return json({error:'Choose a date in the next 12 months.'},400);const rows=await database.prepare("SELECT venue_slug FROM demo_slots WHERE event_date=? AND (status='booked' OR (status='held' AND expires_at>?))").bind(date,now).all();return json({unavailable:rows.results.map(r=>r.venue_slug),serverTime:now});}
+   const slug=url.searchParams.get('venue');const month=url.searchParams.get('month');const date=url.searchParams.get('date');const selectedPackage=packageIdSchema.safeParse(url.searchParams.get('package')||'marriage-24h');const selectedHours=extraHoursSchema.safeParse(Number(url.searchParams.get('extraHours')||0));if(!selectedPackage.success||!selectedHours.success)return json({error:'Invalid package or extra hours'},400);const packageId=selectedPackage.data,extraHours=selectedHours.data;
+   if(date){if(!dateSchema.safeParse(date).success)return json({error:'Choose a date in the next 12 months.'},400);return json({unavailable:await unavailableVenues(date,packageId,extraHours),serverTime:now});}
    if(!slug||!month||!/^\d{4}-\d{2}$/.test(month)||!validDate(month+'-01'))return json({error:'Invalid calendar request'},400);
-   await venuePricing(slug);return json(await calendarSnapshot(slug,month,user.userId));
+   await venuePricing(slug);return json(await calendarSnapshot(slug,month,user.userId,packageId,extraHours));
   }
   if(action==='bookings'){const rows=await database.prepare('SELECT id,venue_slug,event_date,quote_json,created_at FROM demo_bookings WHERE user_id=? ORDER BY created_at DESC LIMIT 100').bind(user.userId).all();return json({bookings:rows.results.map(r=>({...r,quote:JSON.parse(String(r.quote_json)),quote_json:undefined}))});}
   if(action==='drafts'||action==='admin'){
@@ -44,11 +44,11 @@ export async function POST(request:Request,{params}:{params:Promise<{action:stri
    const valid=size>12&&(type==='image/jpeg'?bytes[0]===255&&bytes[1]===216&&bytes[2]===255:type==='image/png'?[137,80,78,71,13,10,26,10].every((b,i)=>bytes[i]===b):new TextDecoder().decode(bytes.slice(0,4))==='RIFF'&&new TextDecoder().decode(bytes.slice(8,12))==='WEBP');if(!valid)return reply({error:'The file content does not match its image type.'},400);
    const id=crypto.randomUUID();const key='owner-images/'+id;await bucket().put(key,bytes,{httpMetadata:{contentType:type}});try{await database.prepare('INSERT INTO owner_images (id,owner_id,object_key,content_type,created_at) VALUES (?,?,?,?,?)').bind(id,user.userId,key,type,new Date().toISOString()).run();}catch(e){await bucket().delete(key);throw e;}return reply({id},201);
   }
-  let body:unknown;try{body=await readBody(request,formFlow);if(formFlow){const f=body as Record<string,string>;body=action==='hold'?{venueSlug:f.venueSlug,date:f.date,guests:Number(f.guests),packageId:f.packageId,addons:f.addons?f.addons.split(','):[]}:action==='confirm'?{holdId:f.holdId,acknowledgeDemo:f.acknowledgeDemo==='yes'}:{holdId:f.holdId};}}catch{return reply({error:'Invalid or oversized JSON request'},400);}
+  let body:unknown;try{body=await readBody(request,formFlow);if(formFlow){const f=body as Record<string,string>;body=action==='hold'?{venueSlug:f.venueSlug,date:f.date,guests:Number(f.guests),packageId:f.packageId,extraHours:Number(f.extraHours||0),addons:f.addons?f.addons.split(','):[]}:action==='confirm'?{holdId:f.holdId,acknowledgeDemo:f.acknowledgeDemo==='yes'}:{holdId:f.holdId};}}catch{return reply({error:'Invalid or oversized JSON request'},400);}
   if(action==='hold'){
    const parsed=selectionSchema.safeParse(body);if(!parsed.success)return reply({error:parsed.error.issues[0].message},400);const s=parsed.data;const {venue,pricing,approval}=await venuePricing(s.venueSlug);if(s.guests>venue.capacity)return reply({error:'Guest count exceeds venue capacity.'},400);
    const quote=makeQuote(venue,pricing,s);const id=crypto.randomUUID();const expiresAt=now+HOLD_SECONDS;
-   const args=[venue.slug,s.date,id,user.userId,expiresAt,JSON.stringify(quote),...(approval?[approval.id,approval.dataJson]:[]),now];const result=await database.prepare(approval?ownerHoldSQL:holdSQL).bind(...args).first();if(!result)return reply({error:'This date was just held or booked. Choose another available date.'},409);return reply({id,expiresAt,quote,serverTime:now},201);
+   const args=holdBindings(venue.slug,s.date,id,user.userId,expiresAt,quote,now,approval);const result=await database.prepare(approval?ownerHoldSQL:holdSQL).bind(...args).first();if(!result)return reply({error:'This access period overlaps a held or booked event, or the listing changed. Choose another available date or package.'},409);return reply({id,expiresAt,quote,serverTime:now},201);
   }
   if(action==='confirm'||action==='release'){
    const parsed=z.object({holdId:z.string().uuid(),...(action==='confirm'?{acknowledgeDemo:z.literal(true)}:{})}).strict().safeParse(body);if(!parsed.success)return reply({error:'Invalid hold request'},400);const holdId=parsed.data.holdId;

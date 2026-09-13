@@ -13,6 +13,12 @@ for(const file of ['lib/venues.ts','lib/booking.ts','lib/owner-venue.ts','lib/db
  writeFileSync(dest,ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText);
 }
 const sql=new DatabaseSync(':memory:');for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+file,'utf8'));
+// The package migration changes the index without rewriting existing booking data.
+const migrationDb=new DatabaseSync(':memory:');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')&&!f.startsWith('0003_')).sort())migrationDb.exec(readFileSync('drizzle/'+f,'utf8'));
+migrationDb.prepare("INSERT INTO demo_slots (venue_slug,event_date,status,hold_id,quote_json) VALUES ('preserved','2026-01-01','booked','legacy-id','{}')").run();
+migrationDb.exec(readFileSync('drizzle/0003_futuristic_magneto.sql','utf8'));
+assert.equal(migrationDb.prepare('SELECT hold_id FROM demo_slots').get().hold_id,'legacy-id');
+assert.equal(migrationDb.prepare("SELECT [unique] AS u FROM pragma_index_list('demo_slots') WHERE name='idx_demo_slot_venue_date'").get().u,0);migrationDb.close();
 class Statement{constructor(text,args=[]){this.text=text;this.args=args;}bind(...args){return new Statement(this.text,args);}first(){return sql.prepare(this.text).all(...this.args)[0]||null;}all(){return {results:sql.prepare(this.text).all(...this.args)};}run(){const r=sql.prepare(this.text).run(...this.args);return {meta:{changes:Number(r.changes)}};}}
 const objects=new Map();globalThis.__testEnv={RITEVENUE_ADMIN_EMAIL:'admin@example.test',DB:{prepare:text=>new Statement(text),batch:statements=>{sql.exec('BEGIN');try{const results=statements.map(s=>s.run());sql.exec('COMMIT');return results;}catch(e){sql.exec('ROLLBACK');throw e;}}},BUCKET:{put:async(k,b)=>objects.set(k,b),get:async k=>objects.has(k)?{body:objects.get(k)}:null,delete:async k=>objects.delete(k)}};
 globalThis.__testUser={userId:'couple-a',email:'couple@example.test',displayName:'Test couple'};
@@ -23,7 +29,7 @@ assert.match(indiaToday(),/^\d{4}-\d{2}-\d{2}$/);
 const origin='https://ritevenue.test';
 async function post(action,body,headers={}){return api.POST(new Request(origin+'/api/demo/'+action,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',...headers},body:JSON.stringify(body)}),{params:Promise.resolve({action})});}
 async function get(action,query=''){return api.GET(new Request(origin+'/api/demo/'+action+query),{params:Promise.resolve({action})});}
-const selection={venueSlug:venues[0].slug,date:indiaToday(),guests:100,packageId:'full-day',addons:['suite']};
+const selection={venueSlug:venues[0].slug,date:indiaToday(),guests:100,packageId:'marriage-24h',addons:['suite']};
 assert.equal((await post('hold',{...selection,total:1})).status,400);assert.equal((await post('hold',{...selection,date:'2026-02-30'})).status,400);assert.equal((await post('hold',{...selection,guests:9999})).status,400);assert.equal((await post('hold',selection,{Origin:'https://attacker.test'})).status,403);
 const attempts=await Promise.all(Array.from({length:12},()=>post('hold',selection)));assert.equal(attempts.filter(r=>r.status===201).length,1);assert.equal(attempts.filter(r=>r.status===409).length,11);
 const hold=await attempts.find(r=>r.status===201).json();assert.equal(hold.quote.advance+hold.quote.balance,hold.quote.total);assert.equal(hold.quote.items.reduce((s,i)=>s+i.amount,0)+hold.quote.tax,hold.quote.total);
@@ -57,7 +63,7 @@ assert.equal((await get('image','?id='+image.id)).status,200);
 const ownerSelection={...selection,venueSlug:ownerVenue.slug};
 const ownerHold=await (await post('hold',ownerSelection)).json();
 assert.ok(ownerHold.id);assert.equal(ownerHold.quote.venueSource,'owner');
-assert.equal(ownerHold.quote.items[0].amount,updated.rent);
+assert.equal(ownerHold.quote.items[0].amount,updated.marriageRent);
 assert.equal((await post('hold',ownerSelection)).status,409);
 const visibleCalendar=await (await get('calendar','?venue='+ownerVenue.slug+'&month='+indiaToday().slice(0,7))).json();
 assert.equal(visibleCalendar.days[0].status,'held');
@@ -67,7 +73,7 @@ globalThis.__testUser={userId:'couple-a',email:'couple@example.test'};
 const amended={...draft,images:[image.id],name:'Updated owner venue',pricing:{...updated,rent:1234500},submit:true};
 assert.equal((await post('drafts',amended)).status,200);
 assert.equal((await (await get('catalog')).json()).venues.length,20);
-const raced=sql.prepare(domain.ownerHoldSQL).get(ownerVenue.slug,domain.lastBookableDate(),crypto.randomUUID(),'couple-b',Math.floor(Date.now()/1000)+7200,JSON.stringify(ownerHold.quote),id,priorPayload,Math.floor(Date.now()/1000));
+const raced=sql.prepare(domain.ownerHoldSQL).get(...domain.holdBindings(ownerVenue.slug,domain.lastBookableDate(),crypto.randomUUID(),'couple-b',Math.floor(Date.now()/1000)+7200,ownerHold.quote,Math.floor(Date.now()/1000),{id,dataJson:priorPayload}));
 assert.equal(raced,undefined);
 globalThis.__testUser={userId:'couple-b',email:'other@example.test'};
 assert.equal((await get('image','?id='+image.id)).status,404);
@@ -91,5 +97,67 @@ globalThis.__testUser={userId:'couple-a',email:'couple@example.test'};
 const formStart=await formPost('start-checkout',{venueSlug:venues[4].slug,date:indiaToday(),guests:'120',packageId:'full-day',addons:''});assert.equal(formStart.status,303);const formHold=new URL(formStart.headers.get('location')).pathname.split('/').pop();assert.match(formHold,/^[a-f0-9-]{36}$/);
 const formConfirm=await formPost('complete-checkout',{holdId:formHold,acknowledgeDemo:'yes'});assert.equal(formConfirm.status,303);assert.ok(new URL(formConfirm.headers.get('location')).pathname.startsWith('/bookings/'));assert.equal((await formPost('complete-checkout',{holdId:formHold,acknowledgeDemo:'yes'})).headers.get('location'),formConfirm.headers.get('location'));
 const invalidForm=await formPost('start-checkout',{venueSlug:venues[4].slug,date:'invalid',guests:'120',packageId:'full-day',addons:''});assert.equal(invalidForm.status,303);assert.ok(invalidForm.headers.get('location').includes('invalid_input'));
+// Four independently priced packages, 5% advance, and extra hours.
+assert.equal(hold.quote.advancePercent,5);assert.equal(hold.quote.advance,Math.round(hold.quote.total*0.05));
+assert.equal(hold.quote.startsAt,selection.date+'T16:00:00+05:30');
+assert.equal(hold.quote.endsAt,domain.shiftDate(selection.date,1)+'T16:00:00+05:30');
+const rounded=domain.makeQuote(venues[8],domain.pricingSchema.parse({rent:10001,ac:0,generator:0,parking:0,cleaning:0}),{...selection,packageId:'full-day',extraHours:0,addons:[]});
+assert.equal(rounded.advance,590);assert.equal(rounded.advance+rounded.balance,rounded.total);
+assert.equal(domain.shiftDate('2028-02-28',1),'2028-02-29');
+const priceSet=domain.pricingSchema.parse({rent:4000000,marriageRent:5000000,morningRent:2000000,eveningRent:2500000,extraHour:300000,ac:0,generator:0,parking:0,cleaning:0});
+for(const [packageId,start,end,rent] of [['marriage-24h',16,40,5000000],['full-day',8,22,4000000],['half-morning',7,14,2000000],['half-evening',16,23,2500000]]){
+ const q=domain.makeQuote(venues[8],priceSet,{...selection,packageId,extraHours:2,addons:[]});
+ assert.equal(q.items[0].amount,rent);assert.equal(q.items.find(i=>i.label.startsWith('Extra hours')).amount,600000);
+ assert.equal(q.startsAt,selection.date+'T'+String(start).padStart(2,'0')+':00:00+05:30');
+ assert.equal(q.endsAt,domain.shiftDate(selection.date,Math.floor((end+2)/24))+'T'+String((end+2)%24).padStart(2,'0')+':00:00+05:30');
+ assert.equal(q.advance,Math.round(q.total*0.05));assert.equal(q.balance,q.total-q.advance);
+}
+const testDate=domain.shiftDate(indiaToday(),5),nextDate=domain.shiftDate(testDate,1);
+const overnight={...selection,venueSlug:venues[8].slug,date:testDate,extraHours:0,addons:[]};
+const overnightHold=await (await post('hold',overnight)).json();assert.ok(overnightHold.id);
+const nextMorning={...overnight,date:nextDate,packageId:'half-morning'};
+assert.equal((await post('hold',nextMorning)).status,409);
+const nextCalendar=await (await get('calendar','?venue='+venues[8].slug+'&month='+nextDate.slice(0,7)+'&package=half-morning')).json();
+assert.equal(nextCalendar.days.find(d=>d.date===nextDate).status,'held');assert.equal(nextCalendar.days.find(d=>d.date===nextDate).ownHold,undefined);
+assert.equal((await post('hold',{...overnight,date:nextDate})).status,201); // Back-to-back 4 PM access is allowed.
+// Two half-days can be sold on one date. Extra hours block only true overlaps.
+const morning={...overnight,venueSlug:venues[9].slug,packageId:'half-morning'};
+const morningHold=await (await post('hold',morning)).json();assert.ok(morningHold.id);
+const evening={...morning,packageId:'half-evening'};
+const eveningHold=await (await post('hold',evening)).json();assert.ok(eveningHold.id);
+assert.equal((await post('hold',{...morning,extraHours:3})).status,409);
+const morningConfirmation=await (await post('confirm',{holdId:morningHold.id,acknowledgeDemo:true})).json();
+const eveningConfirmation=await (await post('confirm',{holdId:eveningHold.id,acknowledgeDemo:true})).json();
+assert.ok(morningConfirmation.id);assert.ok(eveningConfirmation.id);assert.notEqual(morningConfirmation.id,eveningConfirmation.id);
+assert.equal(sql.prepare("SELECT count(*) n FROM demo_slots WHERE venue_slug=? AND event_date=? AND status='booked'").get(venues[9].slug,testDate).n,2);
+const extendedMorning={...morning,venueSlug:venues[10].slug,extraHours:3};const extendedHold=await (await post('hold',extendedMorning)).json();assert.ok(extendedHold.id);
+assert.equal((await post('hold',{...evening,venueSlug:venues[10].slug})).status,409);
+assert.equal((await (await get('calendar','?venue='+venues[10].slug+'&month='+testDate.slice(0,7)+'&package=half-evening')).json()).days.find(d=>d.date===testDate).status,'held');
+sql.prepare('UPDATE demo_slots SET expires_at=0 WHERE hold_id=?').run(extendedHold.id);
+assert.equal((await post('hold',{...evening,venueSlug:venues[10].slug})).status,201);
+// Reading availability includes the selected extra hours.
+const reverseEvening=await (await post('hold',{...evening,venueSlug:venues[11].slug})).json();assert.ok(reverseEvening.id);
+assert.equal((await (await get('calendar','?venue='+venues[11].slug+'&month='+testDate.slice(0,7)+'&package=half-morning&extraHours=0')).json()).days.some(d=>d.date===testDate),false);
+assert.equal((await (await get('calendar','?venue='+venues[11].slug+'&month='+testDate.slice(0,7)+'&package=half-morning&extraHours=3')).json()).days.find(d=>d.date===testDate).status,'held');
+assert.equal((await post('hold',{...morning,venueSlug:venues[11].slug,extraHours:3})).status,409);
+// Different start dates compete atomically for overlapping access.
+const adjacentAttempts=await Promise.all([post('hold',{...overnight,venueSlug:venues[12].slug}),post('hold',{...nextMorning,venueSlug:venues[12].slug})]);
+assert.equal(adjacentAttempts.filter(r=>r.status===201).length,1);assert.equal(adjacentAttempts.filter(r=>r.status===409).length,1);
+const boundary=new Date(indiaToday()+'T00:00:00Z');boundary.setUTCMonth(boundary.getUTCMonth()+1,1);const firstNextMonth=boundary.toISOString().slice(0,10),lastThisMonth=domain.shiftDate(firstNextMonth,-1);
+assert.equal((await post('hold',{...overnight,venueSlug:venues[13].slug,date:lastThisMonth,extraHours:4})).status,201);
+assert.equal((await (await get('calendar','?venue='+venues[13].slug+'&month='+firstNextMonth.slice(0,7)+'&package=half-evening')).json()).days.find(d=>d.date===firstNextMonth).status,'held');
+assert.ok((await (await get('calendar','?date='+firstNextMonth)).json()).unavailable.includes(venues[13].slug));
+// Existing locked quotes retain original same-day hours and 25% advances.
+const legacy={...domain.makeQuote(venues[14],domain.defaultPricing(venues[14]),{...overnight,venueSlug:venues[14].slug,packageId:'full-day'}),hours:'08:00 - 22:00',packageName:'Full day'};
+delete legacy.advancePercent;delete legacy.startsAt;delete legacy.endsAt;delete legacy.extraHours;legacy.advance=Math.round(legacy.total/4);legacy.balance=legacy.total-legacy.advance;
+const legacyId=crypto.randomUUID();sql.prepare("INSERT INTO demo_slots (venue_slug,event_date,status,hold_id,user_id,expires_at,quote_json) VALUES (?,?,'held',?,'couple-a',?,?)").run(venues[14].slug,testDate,legacyId,Math.floor(Date.now()/1000)+7200,JSON.stringify(legacy));
+assert.equal((await post('hold',{...overnight,venueSlug:venues[14].slug,date:domain.shiftDate(testDate,-1)})).status,409);
+assert.equal((await post('hold',{...nextMorning,venueSlug:venues[14].slug})).status,201);
+const legacyConfirmation=await (await post('confirm',{holdId:legacyId,acknowledgeDemo:true})).json();
+const savedLegacy=JSON.parse(sql.prepare('SELECT quote_json FROM demo_bookings WHERE id=?').get(legacyConfirmation.id).quote_json);
+assert.equal(savedLegacy.advance,legacy.advance);assert.equal(savedLegacy.hours,'08:00 - 22:00');assert.equal(savedLegacy.advancePercent,undefined);
+assert.equal((await get('calendar','?date='+testDate+'&package=invalid')).status,400);
+assert.equal((await post('hold',{...morning,extraHours:-1})).status,400);assert.equal((await post('hold',{...morning,extraHours:5})).status,400);
+assert.equal((await post('hold',{...morning,extraHours:1.5})).status,400);assert.equal((await post('hold',{...morning,extraHour:1})).status,400);
 globalThis.__testUser=null;assert.equal((await get('calendar','?date='+indiaToday())).status,401);assert.equal((await post('hold',selection)).status,401);
-console.log('Passed: 20 venues, pricing integrity, input validation, competing holds, expiry/reclaim, idempotent confirmation, immutable quotes, cross-account isolation, admin restrictions, private uploads, approval-to-catalog, owner venue booking, edit withdrawal, stale review protection and draft moderation. No external calls made.');
+console.log('Passed: 20 venues, pricing integrity, input validation, competing holds, expiry/reclaim, idempotent confirmation, immutable quotes, cross-account isolation, admin restrictions, private uploads, 5% advance, four package prices, half-day bookings, extra-hour overlap prevention, legacy quote preservation, approval-to-catalog, owner venue booking, edit withdrawal, stale review protection and draft moderation. No external calls made.');
