@@ -1,5 +1,6 @@
 import {z} from 'zod';
 import {db} from '@/lib/db';
+import {savedWindow,type Quote} from '@/lib/booking';
 import {apiUser,apiError,isAdmin,noStore,readBody} from '@/lib/demo-server';
 import {cateringCatalog} from '@/lib/catering-server';
 import {supplierSchema,estimateSelectionSchema,supplierCompatibility,cateringEstimate} from '@/lib/catering';
@@ -22,6 +23,37 @@ export async function POST(request:Request,{params}:{params:Promise<{action:stri
   const reason=supplierCompatibility(venue.policy,supplier,venue.area,s.date,s.guests);if(reason)return json({error:reason},409);
   if(s.optional&&(!menu.optionalName||!menu.optionalPerGuest))return json({error:'This menu has no priced optional add-on.'},400);
   return json({estimate:cateringEstimate(supplier,menu,venue.policy,s),notice:'Estimate only. Supplier-listed availability requires confirmation; no catering is reserved or paid.'});
+ }
+ // Store an optional estimate with the customer's active hold. Venue amounts never change.
+ // Confirmation copies this snapshot with the venue quote; it does not reserve a supplier.
+ if(action==='attach'){
+  const parsed=z.object({holdId:z.string().uuid(),expectedRevision:z.string().uuid().nullable(),selection:estimateSelectionSchema.nullable()}).strict().safeParse(body);
+  if(!parsed.success)return json({error:'Invalid catering selection.'},400);
+  const {holdId,expectedRevision,selection}=parsed.data;
+  const held=await db().prepare("SELECT quote_json FROM demo_slots WHERE hold_id=? AND user_id=? AND status='held' AND expires_at>?").bind(holdId,user.userId,Math.floor(Date.now()/1000)).first<{quote_json:string}>();
+  if(!held)return json({error:'This venue hold expired, was confirmed or is unavailable. Return to your booking.'},409);
+  const quote:Quote=JSON.parse(held.quote_json);
+  if((quote.cateringRevision||null)!==expectedRevision)return json({error:'Your catering selection changed in another tab. Reload checkout before editing it.'},409);
+  let estimate:ReturnType<typeof cateringEstimate>|undefined;
+  if(selection){
+   const window=savedWindow(quote,quote.date);
+   if(selection.venueSlug!==quote.venueSlug||selection.guests!==quote.guests||selection.date<window.startsAt.slice(0,10)||selection.date>window.endsAt.slice(0,10))return json({error:'Use the booked venue, guest count and a meal date within your venue access dates.'},400);
+   const catalog=await cateringCatalog();
+   const venue=catalog.venues.find(v=>v.slug===quote.venueSlug),supplier=catalog.suppliers.find(s=>s.id===selection.supplierId),menu=supplier?.menus.find(m=>m.id===selection.menuId);
+   if(!venue||!supplier||!menu)return json({error:'This venue or menu is no longer available for catering discovery.'},409);
+   if(selection.guests>venue.capacity)return json({error:'Guest count exceeds the venue capacity.'},400);
+   const reason=supplierCompatibility(venue.policy,supplier,venue.area,selection.date,selection.guests);
+   if(reason)return json({error:reason},409);
+   if(selection.optional&&(!menu.optionalName||!menu.optionalPerGuest))return json({error:'This menu has no priced optional add-on.'},400);
+   estimate=cateringEstimate(supplier,menu,venue.policy,selection);
+  }
+  const next:Quote={...quote,cateringRevision:crypto.randomUUID()};
+  if(estimate)next.cateringEstimate=estimate;else delete next.cateringEstimate;
+  // Compare the entire previous payload atomically to reject races with other edits,
+  // expiry, release or confirmation. No schema or confirmed-booking update is needed.
+  const saved=await db().prepare("UPDATE demo_slots SET quote_json=? WHERE hold_id=? AND user_id=? AND status='held' AND expires_at>? AND quote_json=? RETURNING hold_id").bind(JSON.stringify(next),holdId,user.userId,Math.floor(Date.now()/1000),held.quote_json).first();
+  if(!saved)return json({error:'Your venue hold or catering selection changed. Reload checkout.'},409);
+  return json({saved:true,revision:next.cateringRevision,estimate:estimate||null,notice:'Catering estimate saved with your venue selection. No caterer is reserved or paid.'});
  }
  if(action==='drafts'){
   const parsed=z.object({data:supplierSchema,expectedRevision:z.string().uuid().nullable()}).strict().safeParse(body);if(!parsed.success)return json({error:parsed.error.issues[0].message},400);const {data:d,expectedRevision}=parsed.data;

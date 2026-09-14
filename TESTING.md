@@ -1,5 +1,12 @@
 # Validation status
 
+## Optional catering in checkout — pending verification
+
+Prepared add/remove/skip flow inside venue checkout, with a catering-estimate snapshot in the existing held quote. Added regression checks for owned active holds, stale edits, unchanged venue pricing/advance, meal dates across overnight access, copying the selection into confirmation, expired/confirmed hold rejection and venue-only checkout.
+
+**Not run:** TypeScript, SQLite handler suite, production build and browser checks. The development environment was unavailable for this change. Keep it on a draft branch until those checks pass; this entry does not claim deployment.
+
+
 ## Catering pilot — 14 September 2026
 
 Passed: TypeScript and SQLite-backed handler tests covering venue-policy compatibility, supplier locality/date/capacity, minimum billable guests and food spend, optional/mandatory totals, tax rounding, rejected client totals, same-origin checks, private supplier contacts and photos, draft ownership, stale revisions, admin-only approval, catalog publication and withdrawal after edits. The full existing venue booking regression suite also passes. Browser interaction/mobile rendering remains unverified; no real supplier availability, reservation or payment is tested. Production build is a separate release gate.

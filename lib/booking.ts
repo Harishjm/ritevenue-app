@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import type {CateringEstimate} from './catering';
 import {indiaToday,money,type Venue} from './venues';
 export const HOLD_SECONDS=2*60*60;
 export const ADVANCE_PERCENT=5;
@@ -24,7 +25,7 @@ export function lastBookableDate(){const d=new Date(indiaToday()+'T00:00:00Z');d
 export const dateSchema=z.string().refine(v=>validDate(v)&&v>=indiaToday()&&v<=lastBookableDate(),'Choose a valid date within the next 12 months');
 export const selectionSchema=z.object({venueSlug:z.string().min(1).max(100),date:dateSchema,guests:z.number().int().min(1).max(2000),packageId:packageIdSchema,extraHours:extraHoursSchema,addons:z.array(z.enum(['suite','storage'])).max(2).refine(v=>new Set(v).size===v.length,'Duplicate add-ons')}).strict();
 export type Selection=z.infer<typeof selectionSchema>;
-export type Quote={extraHourRate?:number;extraHours?:number;advancePercent?:number;startsAt?:string;endsAt?:string;venueSource?:'owner';version:1;currency:'INR';demo:true;venueSlug:string;venueName:string;locality:string;date:string;guests:number;packageId:string;packageName:string;hours:string;items:{label:string;amount:number}[];subtotal:number;tax:number;total:number;advance:number;balance:number;terms:string;createdAt:string};
+export type Quote={cateringEstimate?:CateringEstimate;cateringRevision?:string;extraHourRate?:number;extraHours?:number;advancePercent?:number;startsAt?:string;endsAt?:string;venueSource?:'owner';version:1;currency:'INR';demo:true;venueSlug:string;venueName:string;locality:string;date:string;guests:number;packageId:string;packageName:string;hours:string;items:{label:string;amount:number}[];subtotal:number;tax:number;total:number;advance:number;balance:number;terms:string;createdAt:string};
 export function makeQuote(v:Venue,p:Pricing,s:Selection):Quote{
  if(s.guests>v.capacity)throw new Error('Guest count exceeds this venue capacity');
  const pack=packages.find(p=>p.id===s.packageId)!;
