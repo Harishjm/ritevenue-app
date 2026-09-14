@@ -19,3 +19,5 @@ export const venueReferences=sqliteTable('venue_references',{
 export const lookupUsage=sqliteTable('google_lookup_usage',{
  id:text('id').primaryKey(),requests:integer('requests').notNull().default(0)
 });
+
+export const cateringDrafts=sqliteTable('catering_drafts',{id:text('id').primaryKey(),ownerId:text('owner_id').notNull(),dataJson:text('data_json').notNull(),status:text('status').notNull().default('draft'),reviewNote:text('review_note').notNull().default(''),revision:text('revision').notNull(),createdAt:text('created_at').notNull(),updatedAt:text('updated_at').notNull()},t=>[index('idx_catering_drafts_owner').on(t.ownerId),index('idx_catering_drafts_status').on(t.status)]);

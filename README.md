@@ -26,6 +26,15 @@ Access periods cannot overlap, including on adjacent dates. Previously held and 
 
 All listings and photos remain behind the private Site access policy. Approval does not enable real payments or publish the site publicly.
 
+## Catering pilot
+
+- `/catering`: choose a venue, meal-service date and guest count; compare compatible menus and calculate/download an itemized estimate. Three clearly fictional caterers with six menus demonstrate the flow.
+- `/owner`: set in-house-only, approved-supplier-only, outside-caterer or unconfirmed policies, plus venue catering fees and minimum food spend. Customers see the policy before venue checkout.
+- `/caterer`: privately save menus, photos, service localities, capacity and stated available/unavailable dates, then submit for review.
+- `/admin/catering`: administrator reviews submissions. Approval adds suppliers to the private catalog; saved edits withdraw them pending another review. Revision tokens prevent stale edits and reviews.
+
+This stage supports discovery and estimates only. It does not reserve caterers, collect their advance, notify suppliers or change venue quotes. The venue's 5% advance does not apply to catering. Supplier contact details stay in the owner/admin workspace. Approved photos use the existing private image route.
+
 ## Source and hosting
 
 This repository contains a source snapshot of the working Sites application, including the calendar, checkout and confirmation-navigation fixes.

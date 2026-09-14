@@ -1,5 +1,9 @@
 # Validation status
 
+## Catering pilot — 14 September 2026
+
+Passed: TypeScript and SQLite-backed handler tests covering venue-policy compatibility, supplier locality/date/capacity, minimum billable guests and food spend, optional/mandatory totals, tax rounding, rejected client totals, same-origin checks, private supplier contacts and photos, draft ownership, stale revisions, admin-only approval, catalog publication and withdrawal after edits. The full existing venue booking regression suite also passes. Browser interaction/mobile rendering remains unverified; no real supplier availability, reservation or payment is tested. Production build is a separate release gate.
+
 ## Five-percent advance and overnight access
 
 The handler suite covers 5% advance rounding, exact 4 PM–4 PM next-day timestamps, four distinct package rentals, two non-overlapping half-day bookings on one date, and extra-hour overlap blocking in either acquisition order, competing holds across dates, package-specific calendar states, search availability, month-boundary overlaps, expired holds and original hours/25% amounts on legacy quotes. The existing booking and owner-publication tests are retained. Browser QA remains unverified.

@@ -25,6 +25,18 @@ This is a private, responsive web prototype. It is not a production booking serv
 - Approval includes the draft update timestamp, rejecting stale reviews. Owner-venue hold acquisition atomically rechecks the approved status and exact reviewed payload. Held/confirmed quotes stay immutable when a listing is edited or hidden. Existing holds can still be confirmed from their checkout page.
 - The catalog refreshes every 10 seconds and on window focus. A newly loaded page sees approval immediately. Owner-supplied galleries are labeled separately from fictional samples; neither uses fabricated reviews. Admin approval is not ownership verification or a public launch.
 
+## Catering discovery pilot
+
+Three fictional suppliers/six menus cover vegetarian and mixed menus, buffet/banana-leaf service, supplier-locality/date/capacity matching and venue permission rules. Images use an explicitly illustrative existing dining photo. Owner venues without an entered policy default to unconfirmed and match no caterers. Hotels and halls have labeled fictional sample restrictions.
+
+`/caterer` stores validated private supplier drafts in `catering_drafts`. Contacts are omitted from discovery. R2 images reuse the upload limits and ownership checks above. `/admin/catering` approves pending rows for private discovery. Saves reset approval; random UUID revisions provide optimistic concurrency for saves and reviews. Approved supplier images are readable by signed-in viewers only while referenced by an approved listing from the uploader. Approval does not verify food licensing or commercial readiness.
+
+`POST /api/catering/estimate` accepts selection identifiers only and reloads the current approved catalog, prices and policy. It checks date, locality, supplier/venue capacity and permission before calculating. Amounts use integer paise. Billable guests are the higher of expected guests and package minimum; minimum food spend is topped up separately, then mandatory staff/equipment/transport/venue fees and optional per-billable-guest extras are added. The supplier-entered tax rate is applied to this entire subtotal as an explicit prototype assumption (sample menus use illustrative 5%). Platform fee is zero. Future production tax treatment may need separate line-specific rules.
+
+The estimate is for one meal service and excludes venue rent, future extra guests and changes. It includes a final guest-count deadline, extra-guest rate and cancellation/change terms. JSON download is an estimate, not a stored order or locked price. Stated availability has no hold/reservation semantics; a date match is not a confirmed capacity promise. Refreshing/recalculating rechecks supplier data, while an already downloaded estimate may become stale. No catering payment, 5% advance, supplier notification or reservation endpoint is enabled. Existing venue booking tables/quotes are unchanged.
+
+Migration `0004_many_maria_hill.sql` adds only the supplier-draft table and indexes. Venue catering policy stays in the existing validated owner-draft JSON with backward-compatible defaults. Suppliers need administrator review before discovery, plus venue permission when a whitelist applies. Dates are reviewed with the supplier draft; no real-time supplier inventory is claimed.
+
 ## Retired functionality
 
 Google import/lookup and old enquiry APIs return 410. The old discovery screen redirects to the demo home. Previously stored identifiers and legacy test requests are retained, not deleted. Legacy Google helper files are unused by active routes. No Google API requests or external outreach occur in the new flow.
