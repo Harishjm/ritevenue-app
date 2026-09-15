@@ -58,3 +58,11 @@ Four original planning articles use server-rendered content, unique titles/descr
 ## Verification
 
 `node tests/prototype.mjs` transpiles the real domain and route code into an isolated test harness, runs generated migrations against SQLite and exercises handlers with a D1-compatible adapter and mocked private object storage. It makes no external calls. It covers competing holds, expiry, quote integrity, idempotency, role/ownership isolation, origin checks, uploads and moderation. TypeScript and production builds are run separately. These tests do not replace hosted browser or payment-provider tests.
+
+## Optional catering within venue checkout
+
+After selecting a venue and creating its timed hold, checkout offers Choose catering or Skip catering. The inline menu picker fixes the venue and guest count to the hold, and permits a meal date within the venue's access dates (including the second day of a marriage package). Exact meal times remain unconfirmed. Adding saves a server-recalculated estimate; checkout then shows the saved full breakdown. Customers can replace or remove it before confirmation.
+
+The optional cateringEstimate and cateringRevision fields live alongside existing venue fields in quote_json. They are planning preferences only: venue total, advance, balance and access times never change. Attachment writes require an owned, unexpired held row, a matching client revision, and an atomic comparison of the old quote payload. Released/expired/confirmed holds reject changes. Normal confirmation copies the whole current snapshot into the existing booking record. Receipt and its JSON/PDF include the estimate separately from the locked venue price. Historical venue-only quotes remain valid.
+
+No new database migration, supplier reservation, catering advance, event planner or supplier notification is introduced. Supplier approval and venue rules are rechecked when attaching; a saved estimate is not a guarantee of later availability or pricing. TypeScript, the SQLite handler regression suite and production build passed on 15 September 2026. Browser interaction remains unverified.

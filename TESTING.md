@@ -1,5 +1,9 @@
 # Validation status
 
+## Optional catering in checkout — verified 15 September 2026
+
+Passed TypeScript no-emit compilation, production build and the full SQLite handler suite, including add/remove/skip, owned active holds, stale revisions, unchanged venue amounts and advance, meal dates across overnight access, confirmation persistence, expired/confirmed hold rejection and venue-only checkout. Existing catering and venue booking regressions also passed. Browser interaction and visual/mobile rendering remain unverified. No real supplier reservations or payment collection were tested or enabled.
+
 ## Catering pilot — 14 September 2026
 
 Passed: TypeScript and SQLite-backed handler tests covering venue-policy compatibility, supplier locality/date/capacity, minimum billable guests and food spend, optional/mandatory totals, tax rounding, rejected client totals, same-origin checks, private supplier contacts and photos, draft ownership, stale revisions, admin-only approval, catalog publication and withdrawal after edits. The full existing venue booking regression suite also passes. Browser interaction/mobile rendering remains unverified; no real supplier availability, reservation or payment is tested. Production build is a separate release gate.
