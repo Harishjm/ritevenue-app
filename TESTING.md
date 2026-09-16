@@ -1,5 +1,10 @@
 # Validation status
 
+## Public directory — 16 September 2026
+
+Passed TypeScript and SQLite-backed route checks for anonymous catalog/calendar access, explicit public consent plus admin approval, exclusion of demo fixtures and private approvals, photo ownership/publication boundaries, blocked transactions, signed-in private-record isolation, owner calendar updates, stale/out-of-range/unknown dates and consent withdrawal. The legacy private booking and catering suite also passes in its isolated explicit private-demo mode. Browser/visual testing remains unverified. No production listing is automatically approved by this change.
+
+
 ## Optional catering in checkout — verified 15 September 2026
 
 Passed TypeScript no-emit compilation, production build and the full SQLite handler suite, including add/remove/skip, owned active holds, stale revisions, unchanged venue amounts and advance, meal dates across overnight access, confirmation persistence, expired/confirmed hold rejection and venue-only checkout. Existing catering and venue booking regressions also passed. Browser interaction and visual/mobile rendering remain unverified. No real supplier reservations or payment collection were tested or enabled.

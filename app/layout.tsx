@@ -1,5 +1,6 @@
-import type { Metadata } from 'next';
+import type {Metadata} from 'next';
 import './globals.css';
 import {Header,Footer} from '@/components/header';
-export const metadata:Metadata={title:{default:'RiteVenue | Bengaluru venue booking demonstration',template:'%s | RiteVenue'},description:'Explore a private demonstration of self-serve venue booking, shared availability and locked itemized pricing. Sample and approved owner listings in Bengaluru; no real payments.',robots:{index:false,follow:false},icons:{icon:'/favicon.svg'}};
+import {SITE_ORIGIN} from '@/lib/launch';
+export const metadata:Metadata={metadataBase:new URL(SITE_ORIGIN),title:{default:'RiteVenue | Wedding venues & halls in Bengaluru',template:'%s | RiteVenue'},description:'Explore owner-approved wedding halls, hotels, resorts and party venues in Bengaluru, with photographs and owner-reported calendars.',robots:{index:true,follow:true},icons:{icon:'/favicon.svg'}};
 export default function RootLayout({children}:{children:React.ReactNode}){return <html lang="en-IN"><body><Header/>{children}<Footer/></body></html>}

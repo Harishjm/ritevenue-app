@@ -1,1 +1,1 @@
-export function POST(){return Response.json({error:'Enquiry requests are retired. Use the self-serve demo booking flow.'},{status:410});}
+export function POST(){return Response.json({error:'Enquiry and booking requests are not available during the directory launch.'},{status:410});}

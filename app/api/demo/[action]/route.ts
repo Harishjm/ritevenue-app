@@ -1,6 +1,8 @@
 import {env} from 'cloudflare:workers';
 import {z} from 'zod';
 import {db} from '@/lib/db';
+import {isPublicDirectory} from '@/lib/launch';
+import {publicationSchema} from '@/lib/publication';
 import {calendarSnapshot,unavailableVenues} from '@/lib/calendar';
 import {apiUser,apiError,isAdmin,noStore,readBody,catalogPricing,venuePricing,venueCatalog} from '@/lib/demo-server';
 import {venues,venueTypes,indiaToday} from '@/lib/venues';
@@ -10,7 +12,7 @@ const json=(data:unknown,status=200)=>Response.json(data,{status,headers:noStore
 import {draftSchema} from '@/lib/owner-venue';
 function bucket(){const b=(env as unknown as {BUCKET?:R2Bucket}).BUCKET;if(!b)throw new Error('Storage unavailable');return b;}
 export async function GET(request:Request,{params}:{params:Promise<{action:string}>}){
- try{const user=await apiUser();const {action}=await params;const url=new URL(request.url);const database=db();const now=Math.floor(Date.now()/1000);
+ try{const user=await apiUser();const {action}=await params;const url=new URL(request.url);if(isPublicDirectory()&&['catalog','calendar'].includes(action)&&!isAdmin(user))throw new Error('FORBIDDEN');const database=db();const now=Math.floor(Date.now()/1000);
   if(action==='session')return json({admin:isAdmin(user),name:user.displayName});
   if(action==='catalog')return json(await venueCatalog());
   if(action==='calendar'){
@@ -28,13 +30,13 @@ export async function GET(request:Request,{params}:{params:Promise<{action:strin
   }
   if(action==='image'){
    const id=url.searchParams.get('id');if(!id||!z.string().uuid().safeParse(id).success)throw new Error('NOT_FOUND');const record=await database.prepare('SELECT owner_id,object_key,content_type FROM owner_images WHERE id=?').bind(id).first<{owner_id:string;object_key:string;content_type:string}>();if(!record)throw new Error('NOT_FOUND');
-   if(record.owner_id!==user.userId&&!isAdmin(user)){const approved=await database.prepare("SELECT d.id FROM owner_drafts d,json_each(d.data_json,'$.images') image WHERE d.status='approved_for_demo' AND d.owner_id=? AND image.value=? LIMIT 1").bind(record.owner_id,id).first();if(!approved){const catering=await database.prepare("SELECT d.id FROM catering_drafts d,json_each(d.data_json,'$.images') image WHERE d.status='approved_for_demo' AND d.owner_id=? AND image.value=? LIMIT 1").bind(record.owner_id,id).first();if(!catering)throw new Error('NOT_FOUND');}}const image=await bucket().get(record.object_key);if(!image)throw new Error('NOT_FOUND');return new Response(image.body,{headers:{...noStore,'Content-Type':record.content_type,'X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'"}});
+   if(record.owner_id!==user.userId&&!isAdmin(user)){if(isPublicDirectory())throw new Error('NOT_FOUND');const approved=await database.prepare("SELECT d.id FROM owner_drafts d,json_each(d.data_json,'$.images') image WHERE d.status='approved_for_demo' AND d.owner_id=? AND image.value=? LIMIT 1").bind(record.owner_id,id).first();if(!approved){const catering=await database.prepare("SELECT d.id FROM catering_drafts d,json_each(d.data_json,'$.images') image WHERE d.status='approved_for_demo' AND d.owner_id=? AND image.value=? LIMIT 1").bind(record.owner_id,id).first();if(!catering)throw new Error('NOT_FOUND');}}const image=await bucket().get(record.object_key);if(!image)throw new Error('NOT_FOUND');return new Response(image.body,{headers:{...noStore,'Content-Type':record.content_type,'X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'"}});
   }
   return json({error:'Not found'},404);
  }catch(error){return apiError(error);}
 }
 export async function POST(request:Request,{params}:{params:Promise<{action:string}>}){
- try{const user=await apiUser(request);const {action:requestedAction}=await params;const formFlow=['start-checkout','complete-checkout','cancel-checkout'].includes(requestedAction);const action=({'start-checkout':'hold','complete-checkout':'confirm','cancel-checkout':'release'} as Record<string,string>)[requestedAction]||requestedAction;const database=db();const now=Math.floor(Date.now()/1000);
+ try{const user=await apiUser(request);const {action:requestedAction}=await params;if(isPublicDirectory()&&['hold','confirm','release','start-checkout','complete-checkout','cancel-checkout'].includes(requestedAction))return json({error:'Online booking, date holds and payments are not available during the directory launch.'},410);const formFlow=['start-checkout','complete-checkout','cancel-checkout'].includes(requestedAction);const action=({'start-checkout':'hold','complete-checkout':'confirm','cancel-checkout':'release'} as Record<string,string>)[requestedAction]||requestedAction;const database=db();const now=Math.floor(Date.now()/1000);
   const reply=(data:any,status=200)=>{if(!formFlow)return json(data,status);const path=status>=400?'/checkout/problem?code='+(status===409?'not_available':status===400?'invalid_input':'service_unavailable'):action==='hold'?'/checkout/'+data.id:action==='confirm'?'/bookings/'+data.id:'/bookings';return Response.redirect(new URL(path,request.url),303);};
   if(action==='images'){
    const count=await database.prepare('SELECT count(*) AS n FROM owner_images WHERE owner_id=?').bind(user.userId).first<{n:number}>();if((count?.n||0)>=30)return reply({error:'Demo limit: 30 uploaded images per account.'},400);
@@ -57,19 +59,36 @@ export async function POST(request:Request,{params}:{params:Promise<{action:stri
    const id=crypto.randomUUID();await database.batch([database.prepare(confirmInsertSQL).bind(id,new Date().toISOString(),holdId,user.userId,now),database.prepare(confirmSlotSQL).bind(holdId,holdId,user.userId,holdId)]);
    const booking=await database.prepare('SELECT id FROM demo_bookings WHERE hold_id=? AND user_id=?').bind(holdId,user.userId).first<{id:string}>();if(!booking)return reply({error:'Your hold expired or was released. Select the date again.'},409);return reply({id:booking.id},201);
   }
+  if(action==='public-calendar'){
+   const parsed=z.object({id:z.string().uuid(),calendar:publicationSchema.shape.calendar,expectedUpdatedAt:z.string().min(1).max(64)}).strict().safeParse(body);
+   if(!parsed.success)return reply({error:'Check the calendar dates and unavailable dates.'},400);
+   const d=parsed.data;const current=await database.prepare("SELECT data_json FROM owner_drafts WHERE id=? AND owner_id=? AND status='approved_public' AND updated_at=?").bind(d.id,user.userId,d.expectedUpdatedAt).first<{data_json:string}>();
+   if(!current)return reply({error:'This listing changed, is not public, or belongs to another account. Refresh and reopen it.'},409);
+   const data=draftSchema.parse(JSON.parse(current.data_json));data.publication.calendar=d.calendar;data.publication.calendarUpdatedAt=d.calendar?new Date().toISOString():null;
+   const result=await database.prepare("UPDATE owner_drafts SET data_json=?,updated_at=? WHERE id=? AND owner_id=? AND status='approved_public' AND updated_at=? AND data_json=? RETURNING id").bind(JSON.stringify(data),new Date().toISOString(),d.id,user.userId,d.expectedUpdatedAt,current.data_json).first();
+   if(!result)return reply({error:'This calendar changed. Refresh before trying again.'},409);return reply({saved:true});
+  }
   if(action==='pricing'){
    if(!isAdmin(user))throw new Error('FORBIDDEN');const parsed=z.object({venueSlug:z.string(),pricing:pricingSchema}).strict().safeParse(body);if(!parsed.success||!venues.some(v=>v.slug===parsed.data?.venueSlug))return reply({error:'Invalid venue or pricing.'},400);
    await database.prepare('INSERT INTO demo_venue_settings (venue_slug,pricing_json,updated_at) VALUES (?,?,?) ON CONFLICT(venue_slug) DO UPDATE SET pricing_json=excluded.pricing_json,updated_at=excluded.updated_at').bind(parsed.data.venueSlug,JSON.stringify(parsed.data.pricing),new Date().toISOString()).run();return reply({saved:true});
   }
   if(action==='drafts'){
-   const parsed=draftSchema.safeParse(body);if(!parsed.success)return reply({error:parsed.error.issues[0].message},400);const d=parsed.data;
+   const parsed=draftSchema.safeParse(body);if(!parsed.success)return reply({error:parsed.error.issues[0].message},400);const d=parsed.data;d.publication.calendarUpdatedAt=d.publication.calendar?new Date().toISOString():null;
    for(const id of d.images){const image=await database.prepare('SELECT id FROM owner_images WHERE id=? AND owner_id=?').bind(id,user.userId).first();if(!image)return reply({error:'Choose images uploaded by your account.'},400);}
    if(d.submit&&!d.images.length)return reply({error:'Add at least one image before submitting for review.'},400);
    const stamp=new Date().toISOString();const saved=await database.prepare("INSERT INTO owner_drafts (id,owner_id,data_json,status,review_note,created_at,updated_at) VALUES (?,?,?,?,'',?,?) ON CONFLICT(id) DO UPDATE SET data_json=excluded.data_json,status=excluded.status,review_note='',updated_at=excluded.updated_at WHERE owner_drafts.owner_id=excluded.owner_id RETURNING id").bind(d.id,user.userId,JSON.stringify(d),d.submit?'pending_review':'draft',stamp,stamp).first();if(!saved)throw new Error('FORBIDDEN');return reply({id:d.id,status:d.submit?'pending_review':'draft'});
   }
   if(action==='review'){
-   if(!isAdmin(user))throw new Error('FORBIDDEN');const parsed=z.object({id:z.string().uuid(),status:z.enum(['approved_for_demo','changes_requested']),note:z.string().trim().min(5).max(1000),expectedUpdatedAt:z.string().min(1).max(64)}).strict().safeParse(body);if(!parsed.success)return reply({error:'Add a review note (5-1000 characters).'},400);
-   const r=await database.prepare("UPDATE owner_drafts SET status=?,review_note=?,updated_at=? WHERE id=? AND status='pending_review' AND updated_at=? RETURNING id").bind(parsed.data.status,parsed.data.note,new Date().toISOString(),parsed.data.id,parsed.data.expectedUpdatedAt).first();if(!r)return reply({error:'This draft is no longer awaiting review. Refresh the workspace.'},409);return reply({reviewed:true});
+   if(!isAdmin(user))throw new Error('FORBIDDEN');const parsed=z.object({id:z.string().uuid(),status:z.enum(['approved_for_demo','approved_public','changes_requested']),note:z.string().trim().min(5).max(1000),expectedUpdatedAt:z.string().min(1).max(64)}).strict().safeParse(body);if(!parsed.success)return reply({error:'Add a review note (5-1000 characters).'},400);
+   let reviewedPayload:string|null=null;
+   if(parsed.data.status==='approved_public'){
+    const pending=await database.prepare("SELECT data_json FROM owner_drafts WHERE id=? AND status='pending_review' AND updated_at=?").bind(parsed.data.id,parsed.data.expectedUpdatedAt).first<{data_json:string}>();
+    if(!pending)return reply({error:'This draft changed. Refresh before publishing.'},409);
+    reviewedPayload=pending.data_json;
+    const d=draftSchema.safeParse(JSON.parse(pending.data_json));
+    if(!d.success||!d.data.publication.consent||!d.data.images.length)return reply({error:'Public publication requires explicit owner consent and owner-supplied photos.'},400);
+   }
+   const r=await database.prepare("UPDATE owner_drafts SET status=?,review_note=?,updated_at=? WHERE id=? AND status='pending_review' AND updated_at=? AND (? IS NULL OR data_json=?) RETURNING id").bind(parsed.data.status,parsed.data.note,new Date().toISOString(),parsed.data.id,parsed.data.expectedUpdatedAt,reviewedPayload,reviewedPayload).first();if(!r)return reply({error:'This draft is no longer awaiting review. Refresh the workspace.'},409);return reply({reviewed:true});
   }
   return reply({error:'Not found'},404);
  }catch(error){return apiError(error);}

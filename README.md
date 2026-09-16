@@ -1,5 +1,13 @@
 # RiteVenue
 
+## Public directory launch — 16 September 2026
+
+The current public experience supports owner-authorized venue listings and read-only, owner-reported calendars. Checkout, holds, confirmation and catering attachment/estimate endpoints are disabled in the default launch mode. Fictional fixtures and private-demo approvals are excluded from public pages and APIs. Earlier sections below describe the retained private prototype history.
+
+Owners use /owner, grant explicit public-display permission and submit genuine listing/photos. Admin approves via /admin. Calendar-only updates are available to the submitting owner after publication and remain live; listing edits withdraw publication pending review. Calendar information over seven days old, missing dates and dates outside the supplied range appear unconfirmed. No live inventory synchronization is claimed.
+
+The public root, planning guides, approved venue pages, robots and sitemap support search discovery. Search Console verification/submission and indexing are separate steps; rankings and indexing are not guaranteed. Private workspaces and historical receipts still require sign-in and ownership/admin authorization. The default RITEVENUE_MODE is the public directory; do not set private_demo on a public deployment. The legacy regression tests use that value only inside their isolated mock environment before switching to the real public default for boundary tests.
+
 Bengaluru venue booking prototype: 20 fictional venues, shared availability, two-hour holds, simulated advance payments, locked itemized quotes, owner drafts and private photo uploads, and admin review. Approved owner venues now appear alongside samples in the private catalog, with their supplied photos, prices and simulated booking calendar.
 
 **Demo only:** no real reservations, payment collection, verified reviews or Google Places calls. The hosted demonstration remains private and noindex.

@@ -1,5 +1,6 @@
 import {z} from 'zod';
 import {db} from '@/lib/db';
+import {isPublicDirectory} from '@/lib/launch';
 import {savedWindow,type Quote} from '@/lib/booking';
 import {apiUser,apiError,isAdmin,noStore,readBody} from '@/lib/demo-server';
 import {cateringCatalog} from '@/lib/catering-server';
@@ -7,6 +8,7 @@ import {supplierSchema,estimateSelectionSchema,supplierCompatibility,cateringEst
 export const dynamic='force-dynamic';
 const json=(data:unknown,status=200)=>Response.json(data,{status,headers:noStore});
 export async function GET(request:Request,{params}:{params:Promise<{action:string}>}){try{const user=await apiUser();const {action}=await params;
+ if(action==='catalog'&&isPublicDirectory()&&!isAdmin(user))throw new Error('FORBIDDEN');
  if(action==='catalog')return json(await cateringCatalog());
  if(action==='drafts'||action==='admin'){
   if(action==='admin'&&!isAdmin(user))throw new Error('FORBIDDEN');
@@ -15,7 +17,7 @@ export async function GET(request:Request,{params}:{params:Promise<{action:strin
  }
  return json({error:'Not found'},404);
 }catch(e){return apiError(e);}}
-export async function POST(request:Request,{params}:{params:Promise<{action:string}>}){try{const user=await apiUser(request);const {action}=await params;let body:unknown;try{body=await readBody(request);}catch{return json({error:'Invalid or oversized JSON request.'},400);}
+export async function POST(request:Request,{params}:{params:Promise<{action:string}>}){try{const user=await apiUser(request);const {action}=await params;if(isPublicDirectory()&&['estimate','attach'].includes(action))return json({error:'Catering estimates and reservations are not part of the public venue directory.'},410);let body:unknown;try{body=await readBody(request);}catch{return json({error:'Invalid or oversized JSON request.'},400);}
  if(action==='estimate'){
   const parsed=estimateSelectionSchema.safeParse(body);if(!parsed.success)return json({error:parsed.error.issues[0].message},400);const s=parsed.data;
   const catalog=await cateringCatalog();const venue=catalog.venues.find(v=>v.slug===s.venueSlug),supplier=catalog.suppliers.find(v=>v.id===s.supplierId),menu=supplier?.menus.find(m=>m.id===s.menuId);

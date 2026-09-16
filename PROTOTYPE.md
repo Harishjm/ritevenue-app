@@ -1,4 +1,15 @@
-# RiteVenue owner demonstration
+# RiteVenue — directory launch and prototype history
+
+## Current public launch
+
+The public deployment now serves the real-owner directory described in README.md. All transactional actions are disabled by default. Only owner_drafts rows with approved_public status AND explicit publication consent are exposed, using an allowlisted projection that excludes owner IDs, review notes and private contacts. Image access checks status, consent, same uploader ownership and listing reference on every request. Legacy request receipts return not found; prior booking receipts remain account/admin protected. Public status never migrates automatically from approved_for_demo.
+
+Owner calendar declarations are stored in reviewed draft JSON. Their freshness timestamp is assigned server-side when the owner supplies or updates the calendar; admin approval does not refresh it. Calendar-only writes require owner identity, expected update time and exact prior payload, and cannot change listing details. Updating the listing returns it to a private review state. Public publish reviews atomically recheck the reviewed JSON, including consent. There is no schema migration or destructive data conversion.
+
+Robots and sitemaps expose public editorial and public-approved venue URLs. Authentication is still enforced in every protected route/API, independently of robots. Default public mode disables holds, confirmation, release and catering estimates/attachment, including native form aliases. Public access is enabled only after this source is deployed successfully. Search Console verification and indexing are not performed by the application.
+
+The sections below record the earlier private demonstration; those booking features are retained in source and tests, not enabled on the public directory.
+
 
 This is a private, responsive web prototype. It is not a production booking service and does not collect payments. The 20 sample venues are fictional, with illustrative stock photography and real Bengaluru locality labels. Approved owner submissions also appear in the private catalog with owner-provided details and photos. All booking inventory and payments remain simulated. No claim of being first in the market is made.
 
