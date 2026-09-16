@@ -5,7 +5,7 @@ import {createRequire} from 'node:module';
 import {DatabaseSync} from 'node:sqlite';
 import assert from 'node:assert/strict';
 const root=resolve('.sites-runtime/prototype-tests');mkdirSync(root,{recursive:true});writeFileSync(resolve(root,'package.json'),'{"type":"commonjs"}');
-for(const file of ['lib/launch.ts','lib/publication.ts','lib/public-venues.ts','app/api/public/[action]/route.ts','lib/venues.ts','lib/catering.ts','lib/catering-server.ts','app/api/catering/[action]/route.ts','lib/booking.ts','lib/owner-venue.ts','lib/db.ts','lib/demo-server.ts','lib/calendar.ts','app/api/demo/[action]/route.ts']){
+for(const file of ['lib/venue-intake.ts','app/api/venue-applications/route.ts','lib/launch.ts','lib/publication.ts','lib/public-venues.ts','app/api/public/[action]/route.ts','lib/venues.ts','lib/catering.ts','lib/catering-server.ts','app/api/catering/[action]/route.ts','lib/booking.ts','lib/owner-venue.ts','lib/db.ts','lib/demo-server.ts','lib/calendar.ts','app/api/demo/[action]/route.ts']){
  let source=readFileSync(file,'utf8').replace("import {env} from 'cloudflare:workers';",'const env=globalThis.__testEnv;');
  if(file==='lib/demo-server.ts')source=source.replace("import {getChatGPTUser,type ChatGPTUser} from '@/app/chatgpt-auth';",'type ChatGPTUser=any;async function getChatGPTUser(){return globalThis.__testUser;}');
  const dest=resolve(root,file.replace(/\.ts$/,'.js'));mkdirSync(dirname(dest),{recursive:true});
@@ -339,3 +339,27 @@ assert.equal((await (await pget('catalog')).json()).venues.length,0);
 assert.equal((await pget('image','?id='+image.id)).status,404);
 assert.equal((await pget('calendar','?venue=owner-'+publicId)).status,404);
 console.log('Passed public launch: anonymous directory, explicit consent and admin approval, no demo inventory, scoped photos, private-record isolation, disabled transactions, owner calendar updates, stale/unconfirmed dates, and consent withdrawal.');
+
+// Public partner onboarding is write-only for visitors; it never creates an account or listing.
+const intakeAPI=require('./app/api/venue-applications/route.js');
+const intake={requestKey:crypto.randomUUID(),venueName:'Test hotel hall',locality:'Rajajinagar',contactName:'Test manager',email:'MANAGER@example.test',phone:'+91 98765 43210',capacity:200,notes:'Please contact after noon.',consent:true,website:''};
+async function submitIntake(data,extra={}){return intakeAPI.POST(new Request(origin+'/api/venue-applications',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json','cf-connecting-ip':'192.0.2.1',...extra},body:JSON.stringify(data)}));}
+globalThis.__testUser=null;
+assert.equal((await intakeAPI.GET()).status,401);
+assert.equal((await submitIntake(intake,{Origin:'https://attacker.test'})).status,403);
+assert.equal((await submitIntake({...intake,consent:false})).status,400);
+assert.equal((await submitIntake({...intake,email:'invalid'})).status,400);
+assert.equal((await submitIntake({...intake,website:'spam'})).status,400);
+assert.equal((await submitIntake({...intake,notes:'x'.repeat(40000)})).status,400);
+const firstIntake=await submitIntake(intake);assert.equal(firstIntake.status,201);const receipt=await firstIntake.json();
+assert.deepEqual(Object.keys(receipt),['reference']);
+const retryIntake=await submitIntake(intake);assert.equal(retryIntake.status,200);assert.equal((await retryIntake.json()).reference,receipt.reference);
+assert.equal((await submitIntake({...intake,venueName:'Changed name'})).status,409);
+assert.equal(sql.prepare('SELECT count(*) AS n FROM public_venue_intakes').get().n,1);
+assert.equal((await (await pget('catalog')).json()).venues.length,0);
+for(let i=0;i<4;i++)assert.equal((await submitIntake({...intake,requestKey:crypto.randomUUID()})).status,201);
+assert.equal((await submitIntake({...intake,requestKey:crypto.randomUUID()})).status,429);
+globalThis.__testUser={userId:'couple-a',email:'couple@example.test'};assert.equal((await intakeAPI.GET()).status,403);
+globalThis.__testUser={userId:'admin',email:'admin@example.test'};const inbox=await intakeAPI.GET();assert.equal(inbox.status,200);const inboxData=await inbox.json();assert.equal(inboxData.applications.length,5);assert.equal(inboxData.applications[0].data.email,'manager@example.test');
+assert.equal(inbox.headers.get('Cache-Control'),'private, no-store');
+console.log('Passed public intake: anonymous submissions, durable idempotency, validation, origin checks, rate limit, admin-only contacts, and no automatic publication.');

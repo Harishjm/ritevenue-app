@@ -126,3 +126,7 @@ Legacy Google/enquiry files remain for reference; their active API endpoints are
 ## Before a real customer launch
 
 Actual payment processing requires a supported production host, approved venue inventory, provider integration with verified webhooks, booking agreements, cancellation/refund handling, production authentication and operational testing. The current Site is a non-transactional owner demonstration. Do not publish fictional inventory as real listings or reuse demo tax/price assumptions as a live quote policy.
+
+## Public venue onboarding
+
+`/list-your-venue` now accepts a private owner application without ChatGPT sign-in. Public calls to POST `/api/venue-applications` validate input, require same-origin JSON, enforce a durable five-per-network-per-day limit, and deduplicate retries. The admin-only GET inbox displays up to 100 recent applications. This does not create a verified account, send emails, upload photos, migrate account identities or publish a listing. Existing authenticated owner/admin workspaces and their protections remain unchanged. Independent owner authentication still needs a supported identity-provider integration; the current Sites auth guide does not supply a non-ChatGPT public auth path.

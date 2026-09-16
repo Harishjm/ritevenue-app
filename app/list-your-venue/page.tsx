@@ -1,2 +1,4 @@
-import {redirect} from 'next/navigation';
-export default function OwnerRedirect(){redirect('/owner');}
+import VenueIntakeForm from '@/components/venue-intake-form';
+import {SITE_ORIGIN} from '@/lib/launch';
+export const metadata={title:'List your venue in Bengaluru',description:'Submit your Bengaluru hotel, resort or event venue to RiteVenue for review. Free listing; no account needed to apply.',alternates:{canonical:SITE_ORIGIN+'/list-your-venue'}};
+export default function ListYourVenue(){return <main className="content-page intake-page"><p className="eyebrow">RITEVENUE / VENUE PARTNERS</p><h1>Bring your venue to RiteVenue.</h1><p className="workspace-intro">Share a few details to start onboarding. Free listing. No account needed to apply.</p><VenueIntakeForm/><details className="intake-existing"><summary>Already using the owner workspace?</summary><p>Existing pilot accounts currently use ChatGPT sign-in to access saved drafts and calendars.</p><a className="filter-button" href="/owner">Open existing workspace · ChatGPT sign-in</a></details></main>;}
