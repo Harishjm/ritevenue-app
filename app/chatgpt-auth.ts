@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { env } from "cloudflare:workers";
 
 export type ChatGPTUser = {
   userId: string;
@@ -19,6 +20,13 @@ const SIGN_OUT_PATH = "/signout-with-chatgpt";
 const CALLBACK_PATH = "/callback";
 
 export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
+  // Sites strips browser-supplied identity headers and injects verified values.
+  // A standalone Worker has no such trust boundary, so never accept these
+  // headers until a replacement identity provider verifies its own session.
+  const deployment = (env as unknown as { RITEVENUE_DEPLOYMENT?: string })
+    .RITEVENUE_DEPLOYMENT;
+  if (deployment?.startsWith("standalone_cloudflare_")) return null;
+
   const requestHeaders = await headers();
   const userId = requestHeaders.get(USER_ID_HEADER);
   const email = requestHeaders.get(USER_EMAIL_HEADER);
