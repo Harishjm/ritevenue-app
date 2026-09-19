@@ -13,7 +13,9 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "cloudflare:prepare:staging": "node scripts/prepare-cloudflare-deploy.mjs staging",
-    "cloudflare:check:staging": "node scripts/prepare-cloudflare-deploy.mjs staging --check"
+    "cloudflare:check:staging": "node scripts/prepare-cloudflare-deploy.mjs staging --check",
+    "cloudflare:prepare:production": "node scripts/prepare-cloudflare-deploy.mjs production",
+    "cloudflare:check:production": "node scripts/prepare-cloudflare-deploy.mjs production --check"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
