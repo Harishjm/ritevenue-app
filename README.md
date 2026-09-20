@@ -4,13 +4,13 @@
 
 The current public experience supports owner-authorized venue listings and read-only, owner-reported calendars. Checkout, holds, confirmation and catering attachment/estimate endpoints are disabled in the default launch mode. Fictional fixtures and private-demo approvals are excluded from public pages and APIs. Earlier sections below describe the retained private prototype history.
 
-Owners use /owner, grant explicit public-display permission and submit genuine listing/photos. Admin approves via /admin. Calendar-only updates are available to the submitting owner after publication and remain live; listing edits withdraw publication pending review. Calendar information over seven days old, missing dates and dates outside the supplied range appear unconfirmed. No live inventory synchronization is claimed.
+Venue representatives apply through `/list-your-venue`. The administrator signs in with an emailed one-time code, reviews the private application, and may convert it into an unpublished working draft. Owner self-service authentication is still planned. Calendar information over seven days old, missing dates and dates outside the supplied range appear unconfirmed. No live inventory synchronization is claimed.
 
-The public root, planning guides, approved venue pages, robots and sitemap support search discovery. Search Console verification/submission and indexing are separate steps; rankings and indexing are not guaranteed. Private workspaces and historical receipts still require sign-in and ownership/admin authorization. The default RITEVENUE_MODE is the public directory; do not set private_demo on a public deployment. The legacy regression tests use that value only inside their isolated mock environment before switching to the real public default for boundary tests.
+The public root, planning guides, approved venue pages, robots and sitemap support search discovery in production. Search Console verification/submission and indexing are separate steps; rankings and indexing are not guaranteed. Staging and local environments emit noindex metadata and disallow crawling. Private workspaces and historical receipts still require sign-in and ownership/admin authorization. The default RITEVENUE_MODE is the public directory; do not set private_demo on a public deployment. The legacy regression tests use that value only inside their isolated mock environment before switching to the real public default for boundary tests.
 
 Bengaluru venue booking prototype: 20 fictional venues, shared availability, two-hour holds, simulated advance payments, locked itemized quotes, owner drafts and private photo uploads, and admin review. Approved owner venues now appear alongside samples in the private catalog, with their supplied photos, prices and simulated booking calendar.
 
-**Demo only:** no real reservations, payment collection, verified reviews or Google Places calls. The hosted demonstration remains private and noindex.
+**Directory launch only:** no real reservations, payment collection, verified reviews or Google Places calls. Non-production deployments remain private and noindex.
 
 ## Booking packages
 
@@ -27,12 +27,13 @@ Access periods cannot overlap, including on adjacent dates. Previously held and 
 
 ## Owner submission to listing
 
-1. Open `/owner`, add details, pricing and photos, then submit for review.
-2. Open `/admin` as the configured administrator and choose **Approve & add to venues**.
-3. Use **View listed venue & calendar** or return to the home catalog. Open catalog tabs refresh within 10 seconds.
-4. Saving an edit hides the listing until it is approved again. Existing bookings and locked quotes remain saved.
+1. A representative submits the private application at `/list-your-venue`.
+2. The configured administrator opens `/admin`, verifies the submission, and either rejects it or creates a private working draft.
+3. The administrator completes the draft, records authorization and owner-supplied photos, then submits it for review.
+4. A review can request changes, reject the submission, approve it for the private demo, or publish it when explicit public-display consent and photos are present.
+5. Saving an approved draft hides it until another review. Existing demo bookings and locked quotes remain saved.
 
-All listings and photos remain behind the private Site access policy. Approval does not enable real payments or publish the site publicly.
+Drafts and photographs remain private until the administrator explicitly approves an owner-authorized submission for public display. Approval does not enable payments.
 
 ## Catering pilot
 
@@ -45,13 +46,11 @@ This stage supports discovery and estimates only. It does not reserve caterers, 
 
 ## Source and hosting
 
-This repository contains a source snapshot of the working Sites application, including the calendar, checkout and confirmation-navigation fixes.
+This repository contains the RiteVenue application and its independent Cloudflare deployment configuration.
 
 Imported Sites source commit: `dd74cfaf7b03e1c84bc2e78109110b328ee09743`.
 
-Live demonstration: https://ritevenue-karnataka.gentle-orbit-8189.chatgpt.site
-
-GitHub stores the code. Pushing here does not automatically deploy the hosted Site. Production database records, uploaded owner photos, runtime secrets, build output and dependencies are not included. Earlier Sites Git history remains in the original repository; this GitHub repository starts with this import.
+GitHub stores the code. Pushing does not deploy staging or production; both deployments require manual GitHub Actions workflows. Database records, uploaded photographs, runtime secrets, build output and dependencies are not included.
 
 ## Stack
 
@@ -78,10 +77,13 @@ The development server uses local Cloudflare emulation. Initialize its database 
 pnpm exec wrangler d1 migrations apply DB --local --config wrangler.local.jsonc
 ```
 
-Create an ignored `.dev.vars` file containing this development-only setting:
+Create an ignored `.dev.vars` file. Use a random value of at least 32 characters for the local authentication secret and a development-only six-digit OTP:
 
 ```dotenv
-RITEVENUE_ADMIN_EMAIL=seedy@sites.test
+RITEVENUE_ADMIN_EMAIL=admin@example.test
+RITEVENUE_AUTH_SECRET=replace-with-a-random-local-secret-of-at-least-32-characters
+RITEVENUE_AUTH_DEV_OTP=123456
+RITEVENUE_OTP_FROM_EMAIL=signin@ritevenue.in
 ```
 
 Then start the application:
@@ -90,19 +92,19 @@ Then start the application:
 pnpm dev
 ```
 
-Open http://localhost:5173. Protected pages lead to the bundled local sign-in flow, which uses the test account `seedy@sites.test`. This loopback-only development identity is not production authentication. Local bookings and uploaded files stay in the ignored `.wrangler` directory.
+Open http://localhost:5173 and use the configured development email and OTP at `/admin/sign-in`. The fixed development OTP is accepted only on loopback when the deployment is not marked as standalone Cloudflare. Local database records and uploaded files stay in the ignored `.wrangler` directory.
 
-The local database configuration uses a placeholder ID for local emulation only. Do not deploy it or use it against a remote database. Hosted identity, D1, R2 and secret configuration are supplied separately by Sites.
+The local database configuration uses a placeholder ID for local emulation only. Do not deploy it or use it against a remote database. Production and staging use separate D1, R2, email and secret bindings.
 
 ## Checks
 
 ```sh
-node tests/prototype.mjs
+pnpm test
 pnpm exec tsc --noEmit
 pnpm build
 ```
 
-The booking test harness exercises real handlers against SQLite with a D1 adapter and mocked object storage. It tests hold contention, expiration, immutable quotes, confirmation retries, account isolation, uploads and moderation without external calls.
+The tests exercise real handlers against SQLite with a D1 adapter and mocked object storage/email. They cover OTP/session security, hold contention, immutable quotes, account isolation, uploads, application conversion and moderation without external calls.
 
 The original source passed these checks in the managed environment. Clean-clone local startup and browser testing have not been verified here. If local startup reports missing tables, rerun the migration command with the development server stopped. Do not run older validation scripts as the current booking suite; some cover retired enquiry/Google flows.
 
@@ -125,8 +127,8 @@ Legacy Google/enquiry files remain for reference; their active API endpoints are
 
 ## Before a real customer launch
 
-Actual payment processing requires a supported production host, approved venue inventory, provider integration with verified webhooks, booking agreements, cancellation/refund handling, production authentication and operational testing. The current Site is a non-transactional owner demonstration. Do not publish fictional inventory as real listings or reuse demo tax/price assumptions as a live quote policy.
+Actual payment processing requires approved venue inventory, provider integration with verified webhooks, booking agreements, cancellation/refund handling, production customer/owner authentication and operational testing. The current Site is a non-transactional public directory. Do not publish fictional inventory as real listings or reuse demo tax/price assumptions as a live quote policy.
 
 ## Public venue onboarding
 
-`/list-your-venue` now accepts a private owner application without ChatGPT sign-in. Public calls to POST `/api/venue-applications` validate input, require same-origin JSON, enforce a durable five-per-network-per-day limit, and deduplicate retries. The admin-only GET inbox displays up to 100 recent applications. This does not create a verified account, send emails, upload photos, migrate account identities or publish a listing. Existing authenticated owner/admin workspaces and their protections remain unchanged. Independent owner authentication still needs a supported identity-provider integration; the current Sites auth guide does not supply a non-ChatGPT public auth path.
+`/list-your-venue` accepts a private application without sign-in. Public calls to POST `/api/venue-applications` validate input, require same-origin JSON, enforce a durable five-per-network-per-day limit, and deduplicate retries. The admin-only inbox displays up to 100 recent applications, supports documented rejection/reopening, and can create one private working draft from each application. Conversion does not confirm owner rights, upload photos or publish the venue. Independent owner authentication is still required before venue representatives can manage their own drafts.

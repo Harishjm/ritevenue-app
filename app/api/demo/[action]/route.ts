@@ -10,6 +10,7 @@ import {dateSchema,selectionSchema,packageIdSchema,extraHoursSchema,makeQuote,HO
 export const dynamic='force-dynamic';
 const json=(data:unknown,status=200)=>Response.json(data,{status,headers:noStore});
 import {draftSchema} from '@/lib/owner-venue';
+import {intakeDataSchema} from '@/lib/venue-intake';
 function bucket(){const b=(env as unknown as {BUCKET?:R2Bucket}).BUCKET;if(!b)throw new Error('Storage unavailable');return b;}
 export async function GET(request:Request,{params}:{params:Promise<{action:string}>}){
  try{const user=await apiUser();const {action}=await params;const url=new URL(request.url);if(isPublicDirectory()&&['catalog','calendar'].includes(action)&&!isAdmin(user))throw new Error('FORBIDDEN');const database=db();const now=Math.floor(Date.now()/1000);
@@ -26,7 +27,8 @@ export async function GET(request:Request,{params}:{params:Promise<{action:strin
    if(action==='admin'&&!isAdmin(user))throw new Error('FORBIDDEN');
    const rows=await (action==='admin'?database.prepare('SELECT id,data_json,status,review_note,updated_at FROM owner_drafts ORDER BY updated_at DESC LIMIT 100'):database.prepare('SELECT id,data_json,status,review_note,updated_at FROM owner_drafts WHERE owner_id=? ORDER BY updated_at DESC LIMIT 100').bind(user.userId)).all();
    const bookings=isAdmin(user)?await database.prepare('SELECT id,venue_slug,event_date,quote_json,created_at FROM demo_bookings ORDER BY created_at DESC LIMIT 100').all():null;
-   return json({drafts:rows.results.map(r=>({...r,data:JSON.parse(String(r.data_json)),data_json:undefined})),bookings:bookings?.results.map(r=>({...r,quote:JSON.parse(String(r.quote_json)),quote_json:undefined})),pricing:isAdmin(user)?await catalogPricing():undefined});
+   const reviews=action==='admin'?await database.prepare('SELECT draft_id,decision,note,created_at FROM venue_review_events ORDER BY created_at DESC LIMIT 500').all():null;
+   return json({drafts:rows.results.map(r=>({...r,data:JSON.parse(String(r.data_json)),data_json:undefined,reviews:reviews?.results.filter(review=>review.draft_id===r.id)})),bookings:bookings?.results.map(r=>({...r,quote:JSON.parse(String(r.quote_json)),quote_json:undefined})),pricing:isAdmin(user)?await catalogPricing():undefined});
   }
   if(action==='image'){
    const id=url.searchParams.get('id');if(!id||!z.string().uuid().safeParse(id).success)throw new Error('NOT_FOUND');const record=await database.prepare('SELECT owner_id,object_key,content_type FROM owner_images WHERE id=?').bind(id).first<{owner_id:string;object_key:string;content_type:string}>();if(!record)throw new Error('NOT_FOUND');
@@ -79,7 +81,7 @@ export async function POST(request:Request,{params}:{params:Promise<{action:stri
    const stamp=new Date().toISOString();const saved=await database.prepare("INSERT INTO owner_drafts (id,owner_id,data_json,status,review_note,created_at,updated_at) VALUES (?,?,?,?,'',?,?) ON CONFLICT(id) DO UPDATE SET data_json=excluded.data_json,status=excluded.status,review_note='',updated_at=excluded.updated_at WHERE owner_drafts.owner_id=excluded.owner_id RETURNING id").bind(d.id,user.userId,JSON.stringify(d),d.submit?'pending_review':'draft',stamp,stamp).first();if(!saved)throw new Error('FORBIDDEN');return reply({id:d.id,status:d.submit?'pending_review':'draft'});
   }
   if(action==='review'){
-   if(!isAdmin(user))throw new Error('FORBIDDEN');const parsed=z.object({id:z.string().uuid(),status:z.enum(['approved_for_demo','approved_public','changes_requested']),note:z.string().trim().min(5).max(1000),expectedUpdatedAt:z.string().min(1).max(64)}).strict().safeParse(body);if(!parsed.success)return reply({error:'Add a review note (5-1000 characters).'},400);
+   if(!isAdmin(user))throw new Error('FORBIDDEN');const parsed=z.object({id:z.string().uuid(),status:z.enum(['approved_for_demo','approved_public','changes_requested','rejected']),note:z.string().trim().min(5).max(1000),expectedUpdatedAt:z.string().min(1).max(64)}).strict().safeParse(body);if(!parsed.success)return reply({error:'Add a review note (5-1000 characters).'},400);
    let reviewedPayload:string|null=null;
    if(parsed.data.status==='approved_public'){
     const pending=await database.prepare("SELECT data_json FROM owner_drafts WHERE id=? AND status='pending_review' AND updated_at=?").bind(parsed.data.id,parsed.data.expectedUpdatedAt).first<{data_json:string}>();
@@ -88,8 +90,36 @@ export async function POST(request:Request,{params}:{params:Promise<{action:stri
     const d=draftSchema.safeParse(JSON.parse(pending.data_json));
     if(!d.success||!d.data.publication.consent||!d.data.images.length)return reply({error:'Public publication requires explicit owner consent and owner-supplied photos.'},400);
    }
-   const r=await database.prepare("UPDATE owner_drafts SET status=?,review_note=?,updated_at=? WHERE id=? AND status='pending_review' AND updated_at=? AND (? IS NULL OR data_json=?) RETURNING id").bind(parsed.data.status,parsed.data.note,new Date().toISOString(),parsed.data.id,parsed.data.expectedUpdatedAt,reviewedPayload,reviewedPayload).first();if(!r)return reply({error:'This draft is no longer awaiting review. Refresh the workspace.'},409);return reply({reviewed:true});
+   const eventId=crypto.randomUUID(),nowStamp=new Date().toISOString(),stamp=nowStamp===parsed.data.expectedUpdatedAt?new Date(Date.now()+1).toISOString():nowStamp;
+   await database.batch([
+    database.prepare("UPDATE owner_drafts SET status=?,review_note=?,updated_at=? WHERE id=? AND status='pending_review' AND updated_at=? AND (? IS NULL OR data_json=?)").bind(parsed.data.status,parsed.data.note,stamp,parsed.data.id,parsed.data.expectedUpdatedAt,reviewedPayload,reviewedPayload),
+    database.prepare('INSERT INTO venue_review_events (id,draft_id,reviewer_id,decision,note,created_at) SELECT ?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM owner_drafts WHERE id=? AND status=? AND updated_at=?)').bind(eventId,parsed.data.id,user.userId,parsed.data.status,parsed.data.note,stamp,parsed.data.id,parsed.data.status,stamp)
+   ]);
+   const event=await database.prepare('SELECT id FROM venue_review_events WHERE id=?').bind(eventId).first();if(!event)return reply({error:'This draft is no longer awaiting review. Refresh the workspace.'},409);return reply({reviewed:true});
   }
+  if(action==='review_intake'){
+   if(!isAdmin(user))throw new Error('FORBIDDEN');const parsed=z.object({id:z.string().uuid(),status:z.enum(['rejected','new']),note:z.string().trim().min(5).max(1000),expectedStatus:z.enum(['new','rejected'])}).strict().safeParse(body);if(!parsed.success)return reply({error:'Add an intake review note (5-1000 characters).'},400);
+   if(parsed.data.status===parsed.data.expectedStatus)return reply({error:'Choose a different intake status.'},400);
+   const result=await database.prepare("UPDATE public_venue_intakes SET status=?,review_note=?,reviewed_by=?,reviewed_at=? WHERE id=? AND status=? AND converted_draft_id IS NULL RETURNING id").bind(parsed.data.status,parsed.data.note,user.userId,new Date().toISOString(),parsed.data.id,parsed.data.expectedStatus).first();
+   if(!result)return reply({error:'This application changed or was already converted. Refresh the inbox.'},409);return reply({reviewed:true});
+  }
+   if(action==='convert_intake'){
+    if(!isAdmin(user))throw new Error('FORBIDDEN');
+    const parsed=z.object({id:z.string().uuid()}).strict().safeParse(body);if(!parsed.success)return reply({error:'Invalid intake id'},400);
+    const intake=await database.prepare('SELECT data_json,status,converted_draft_id FROM public_venue_intakes WHERE id=?').bind(parsed.data.id).first<{data_json:string;status:string;converted_draft_id:string|null}>();
+    if(!intake)return reply({error:'Not found'},404);
+    if(intake.status==='converted'&&intake.converted_draft_id)return reply({created:false,id:intake.converted_draft_id});
+    if(intake.status!=='new')return reply({error:'This application cannot be converted in its current state.'},409);
+    const data=intakeDataSchema.safeParse(JSON.parse(intake.data_json));if(!data.success)return reply({error:'The application data is invalid.'},409);
+    const draftId=crypto.randomUUID(),stamp=new Date().toISOString(),description=data.data.notes.length>=40?data.data.notes:`Application received from ${data.data.contactName}. Complete and verify the venue description before requesting publication.`;
+    const draft=draftSchema.parse({id:draftId,name:data.data.venueName.slice(0,100),locality:data.data.locality.slice(0,100),address:`${data.data.locality}, Bengaluru`,type:'Wedding hall',capacity:data.data.capacity,description,pricing:{rent:10000000,ac:0,generator:0,parking:0,cleaning:0},images:[],cateringPolicy:{},publication:{consent:false,calendar:null,calendarUpdatedAt:null},rightsConfirmed:false,submit:false});
+    await database.batch([
+     database.prepare("INSERT INTO owner_drafts (id,owner_id,data_json,status,review_note,created_at,updated_at) SELECT ?,?,?,\'draft\',\'\',?,? WHERE EXISTS (SELECT 1 FROM public_venue_intakes WHERE id=? AND status=\'new\' AND converted_draft_id IS NULL)").bind(draftId,user.userId,JSON.stringify(draft),stamp,stamp,parsed.data.id),
+     database.prepare("UPDATE public_venue_intakes SET status=\'converted\',converted_draft_id=? WHERE id=? AND status=\'new\' AND EXISTS (SELECT 1 FROM owner_drafts WHERE id=?)").bind(draftId,parsed.data.id,draftId)
+    ]);
+    const converted=await database.prepare('SELECT converted_draft_id FROM public_venue_intakes WHERE id=?').bind(parsed.data.id).first<{converted_draft_id:string|null}>();if(!converted?.converted_draft_id)return reply({error:'The application changed. Refresh and try again.'},409);
+    return reply({created:converted.converted_draft_id===draftId,id:converted.converted_draft_id},converted.converted_draft_id===draftId?201:200);
+   }
   return reply({error:'Not found'},404);
  }catch(error){return apiError(error);}
 }

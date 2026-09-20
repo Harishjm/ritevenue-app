@@ -26,6 +26,8 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_PRODUCTION_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_PRODUCTION_D1_DATABASE_ID }}
       CLOUDFLARE_PRODUCTION_R2_BUCKET: ${{ vars.CLOUDFLARE_PRODUCTION_R2_BUCKET }}
+      RITEVENUE_ADMIN_EMAIL: ${{ secrets.RITEVENUE_ADMIN_EMAIL }}
+      RITEVENUE_OTP_FROM_EMAIL: ${{ vars.RITEVENUE_OTP_FROM_EMAIL }}
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v4
@@ -36,7 +38,7 @@ jobs:
           node-version: 22.13.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: node tests/prototype.mjs
+      - run: pnpm test
       - run: pnpm exec tsc --noEmit
       - run: pnpm build
       - name: Prepare production configuration

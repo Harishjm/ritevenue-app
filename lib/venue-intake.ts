@@ -8,5 +8,6 @@ export const intakeSchema=z.object({
  notes:z.string().trim().max(2000).default(''),consent:z.literal(true),
  website:z.string().max(200).default('')
 }).strict();
+export const intakeDataSchema=intakeSchema.omit({requestKey:true,website:true});
 export const intakeHeaders={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'};
 export async function digest(value:string){return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))),b=>b.toString(16).padStart(2,'0')).join('');}

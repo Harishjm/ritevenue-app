@@ -26,6 +26,6 @@ jobs:
           node-version: 22.13.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: node tests/prototype.mjs
+      - run: pnpm test
       - run: pnpm exec tsc --noEmit
       - run: pnpm build

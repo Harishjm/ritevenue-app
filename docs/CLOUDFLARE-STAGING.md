@@ -4,9 +4,7 @@ This is a preparation path for an independently owned Cloudflare account. It doe
 
 ## Current boundary
 
-The public directory can run as a standalone Cloudflare Worker with D1 and R2. The owner and admin workspaces currently depend on Sites-provided Sign in with ChatGPT routes and trusted identity headers. Those protected workspaces are not portable until a replacement authentication provider is implemented and tested.
-
-Never expose the owner or admin workspace by trusting identity headers supplied directly by a browser or proxy without cryptographic verification.
+The public directory and administrator workspace run as a standalone Cloudflare Worker. Administrator authentication uses a single-use email code, D1-backed challenges and sessions, and an HTTP-only session cookie. Owner self-service authentication is not enabled yet.
 
 ## One-time Cloudflare setup
 
@@ -21,7 +19,10 @@ Complete these steps in a Cloudflare account owned by Harish:
    - `CLOUDFLARE_ACCOUNT_ID`
    - `CLOUDFLARE_API_TOKEN`
    - `CLOUDFLARE_STAGING_D1_DATABASE_ID`
-7. Add environment variable `CLOUDFLARE_STAGING_R2_BUCKET` with the exact staging bucket name.
+   - `RITEVENUE_ADMIN_EMAIL`
+7. Add environment variables `CLOUDFLARE_STAGING_R2_BUCKET` and `RITEVENUE_OTP_FROM_EMAIL`.
+8. Set the Worker secret `RITEVENUE_AUTH_SECRET` to an independently generated value of at least 32 characters. Staging and production must use different values.
+9. Onboard only **Email Sending** for the selected sender domain and bind it as `AUTH_EMAIL`. Review every DNS change before approval. Do not enable Email Routing and do not replace, delete or proxy Hostinger MX, SPF, DKIM, DMARC, autoconfig or autodiscover records. Cloudflare Email Sending uses bounce records on its own subdomain, but its proposed DMARC change must still be compared with the existing record.
 
 Do not put tokens, account IDs, database IDs, or production data in committed files.
 
@@ -33,14 +34,7 @@ The workflow is manual. A push to `main` runs validation but does not deploy.
 
 ## Authentication expectation
 
-For the first infrastructure test, validate only public pages and public venue-application submission. `/owner`, `/admin`, `/caterer`, `/bookings`, and the ChatGPT sign-in routes are not approved for standalone staging use. The application explicitly ignores Sites identity headers in standalone mode, so sending forged `oai-authenticated-user-*` headers cannot unlock those routes.
-
-Before production migration, choose and implement one supported identity path:
-
-- a normal customer identity provider with verified email and secure sessions; or
-- Cloudflare Access with server-side JWT validation and separate authorization rules.
-
-Authentication and authorization must remain separate: a signed-in user is not automatically an administrator.
+Test `/admin/sign-in`, resend throttling, invalid and expired codes, logout, and direct access to admin APIs. Only the configured address can receive a working challenge. A signed-in session also carries an explicit administrator role; email verification alone does not grant access to other addresses. `/owner` remains an administrator-operated workspace until owner authentication and ownership migration are implemented.
 
 ## Database migration and backup
 
@@ -67,9 +61,9 @@ Production rollback must be rehearsed in staging before DNS is changed.
 
 ## Production gate
 
-There is intentionally no production workflow. Add one only after:
+The production workflow exists but must not be run until:
 
-- standalone authentication is complete;
+- administrator OTP has passed staging tests;
 - staging tests pass;
 - D1 and R2 migration rehearsal succeeds;
 - backups and rollback are verified;

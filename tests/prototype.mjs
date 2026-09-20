@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 const root=resolve('.sites-runtime/prototype-tests');mkdirSync(root,{recursive:true});writeFileSync(resolve(root,'package.json'),'{"type":"commonjs"}');
 for(const file of ['lib/venue-intake.ts','app/api/venue-applications/route.ts','lib/launch.ts','lib/publication.ts','lib/public-venues.ts','app/api/public/[action]/route.ts','lib/venues.ts','lib/catering.ts','lib/catering-server.ts','app/api/catering/[action]/route.ts','lib/booking.ts','lib/owner-venue.ts','lib/db.ts','lib/demo-server.ts','lib/calendar.ts','app/api/demo/[action]/route.ts']){
  let source=readFileSync(file,'utf8').replace("import {env} from 'cloudflare:workers';",'const env=globalThis.__testEnv;');
- if(file==='lib/demo-server.ts')source=source.replace("import {getChatGPTUser,type ChatGPTUser} from '@/app/chatgpt-auth';",'type ChatGPTUser=any;async function getChatGPTUser(){return globalThis.__testUser;}');
+ if(file==='lib/demo-server.ts')source=source.replace("import {getAuthenticatedUser,isAdminUser,type AuthUser} from './auth';",'type AuthUser=any;async function getAuthenticatedUser(){return globalThis.__testUser;}function isAdminUser(user){return user?.email===globalThis.__testEnv.RITEVENUE_ADMIN_EMAIL;}');
  const dest=resolve(root,file.replace(/\.ts$/,'.js'));mkdirSync(dirname(dest),{recursive:true});
  source=source.replace(/(['"])@\//g,(_,quote)=>quote+(relative(dirname(dest),root)||'.')+'/');
  writeFileSync(dest,ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText);
@@ -42,12 +42,15 @@ const id=crypto.randomUUID();const draft={id,name:'Owner test venue',locality:'J
 const fake=new Request(origin+'/api/demo/images',{method:'POST',headers:{Origin:origin,'Content-Type':'image/jpeg'},body:'not an image'});assert.equal((await api.POST(fake,{params:Promise.resolve({action:'images'})})).status,400);
 // Fixture bytes exercise upload validation/storage; no real image or external call is needed.
 const bytes=new Uint8Array([255,216,255,224,0,0,0,0,0,0,0,0,0]);const upload=await api.POST(new Request(origin+'/api/demo/images',{method:'POST',headers:{Origin:origin,'Content-Type':'image/jpeg'},body:bytes}),{params:Promise.resolve({action:'images'})});assert.equal(upload.status,201);const image=await upload.json();assert.equal((await post('drafts',{...draft,images:[image.id],submit:true})).status,200);
+const rejectedId=crypto.randomUUID(),rejectedDraft={...draft,id:rejectedId,name:'Incomplete venue submission',images:[image.id],submit:true};assert.equal((await post('drafts',rejectedDraft)).status,200);
 globalThis.__testUser={userId:'couple-b',email:'other@example.test'};assert.equal((await post('drafts',draft)).status,403);assert.equal((await get('image','?id='+image.id)).status,404);assert.equal((await get('admin')).status,403);assert.equal((await (await get('drafts')).json()).drafts.length,0);
 assert.equal((await (await get('catalog')).json()).venues.length,20);
 assert.equal((await get('calendar','?venue=owner-'+id+'&month='+indiaToday().slice(0,7))).status,404);
 assert.equal((await post('hold',{...selection,venueSlug:'owner-'+id})).status,404);
 assert.equal((await post('review',{id,status:'approved_for_demo',note:'Not the admin',expectedUpdatedAt:'stale'})).status,403);
 globalThis.__testUser={userId:'admin',email:'admin@example.test'};assert.equal((await get('image','?id='+image.id)).status,200);assert.equal((await post('review',{id,status:'approved_for_demo',note:'Reviewed for private demo only.',expectedUpdatedAt:sql.prepare('SELECT updated_at FROM owner_drafts WHERE id=?').get(id).updated_at})).status,200);assert.equal(sql.prepare('SELECT status FROM owner_drafts WHERE id=?').get(id).status,'approved_for_demo');
+assert.equal((await post('review',{id:rejectedId,status:'rejected',note:'Ownership evidence is incomplete.',expectedUpdatedAt:sql.prepare('SELECT updated_at FROM owner_drafts WHERE id=?').get(rejectedId).updated_at})).status,200);assert.equal(sql.prepare('SELECT status FROM owner_drafts WHERE id=?').get(rejectedId).status,'rejected');assert.equal(sql.prepare('SELECT decision FROM venue_review_events WHERE draft_id=?').get(rejectedId).decision,'rejected');
+const adminDrafts=await (await get('admin')).json();assert.equal(adminDrafts.drafts.find(row=>row.id===rejectedId).reviews[0].note,'Ownership evidence is incomplete.');
 // Approval publishes one searchable listing with owner pricing and scoped photos.
 const revision=sql.prepare('SELECT updated_at FROM owner_drafts WHERE id=?').get(id).updated_at;
 assert.equal((await post('review',{id,status:'approved_for_demo',note:'Repeat review is stale',expectedUpdatedAt:revision})).status,409);
@@ -359,7 +362,13 @@ assert.equal(sql.prepare('SELECT count(*) AS n FROM public_venue_intakes').get()
 assert.equal((await (await pget('catalog')).json()).venues.length,0);
 for(let i=0;i<4;i++)assert.equal((await submitIntake({...intake,requestKey:crypto.randomUUID()})).status,201);
 assert.equal((await submitIntake({...intake,requestKey:crypto.randomUUID()})).status,429);
-globalThis.__testUser={userId:'couple-a',email:'couple@example.test'};assert.equal((await intakeAPI.GET()).status,403);
+globalThis.__testUser={userId:'couple-a',email:'couple@example.test'};assert.equal((await intakeAPI.GET()).status,403);assert.equal((await post('review_intake',{id:receipt.reference,status:'rejected',note:'Unauthorized review',expectedStatus:'new'})).status,403);
 globalThis.__testUser={userId:'admin',email:'admin@example.test'};const inbox=await intakeAPI.GET();assert.equal(inbox.status,200);const inboxData=await inbox.json();assert.equal(inboxData.applications.length,5);assert.equal(inboxData.applications[0].data.email,'manager@example.test');
 assert.equal(inbox.headers.get('Cache-Control'),'private, no-store');
-console.log('Passed public intake: anonymous submissions, durable idempotency, validation, origin checks, rate limit, admin-only contacts, and no automatic publication.');
+assert.equal((await post('review_intake',{id:receipt.reference,status:'rejected',note:'Ownership evidence has not been supplied.',expectedStatus:'new'})).status,200);assert.equal((await post('convert_intake',{id:receipt.reference})).status,409);
+const reviewedInbox=await (await intakeAPI.GET()).json();const rejectedIntake=reviewedInbox.applications.find(row=>row.id===receipt.reference);assert.equal(rejectedIntake.status,'rejected');assert.equal(rejectedIntake.reviewNote,'Ownership evidence has not been supplied.');assert.ok(rejectedIntake.reviewedAt);
+assert.equal((await post('review_intake',{id:receipt.reference,status:'new',note:'Evidence received; resume verification.',expectedStatus:'rejected'})).status,200);assert.equal((await post('review_intake',{id:receipt.reference,status:'new',note:'Stale duplicate action',expectedStatus:'rejected'})).status,409);
+const conversion=await post('convert_intake',{id:receipt.reference});assert.equal(conversion.status,201);const converted=await conversion.json();assert.ok(converted.id);
+const convertedDraft=sql.prepare('SELECT owner_id,data_json FROM owner_drafts WHERE id=?').get(converted.id);assert.equal(convertedDraft.owner_id,'admin');assert.equal(JSON.parse(convertedDraft.data_json).rightsConfirmed,false);assert.equal(sql.prepare('SELECT converted_draft_id FROM public_venue_intakes WHERE id=?').get(receipt.reference).converted_draft_id,converted.id);
+const repeatedConversion=await post('convert_intake',{id:receipt.reference});assert.equal(repeatedConversion.status,200);assert.equal((await repeatedConversion.json()).id,converted.id);assert.equal(sql.prepare('SELECT count(*) n FROM owner_drafts WHERE id=?').get(converted.id).n,1);assert.equal((await (await pget('catalog')).json()).venues.length,0);
+console.log('Passed public intake: anonymous submissions, durable idempotency, validation, origin checks, rate limit, admin-only contacts, rejection/reopening, atomic draft conversion, and no automatic publication.');

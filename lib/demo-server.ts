@@ -1,12 +1,11 @@
-import {env} from 'cloudflare:workers';
-import {getChatGPTUser,type ChatGPTUser} from '@/app/chatgpt-auth';
+import {getAuthenticatedUser,isAdminUser,type AuthUser} from './auth';
 import {db} from './db';
 import {venues} from './venues';
 import {ownerListing} from './owner-venue';
 import {defaultPricing,pricingSchema,type Pricing} from './booking';
 export const noStore={'Cache-Control':'private, no-store','Vary':'Cookie'};
-export function isAdmin(user:ChatGPTUser){const email=(env as unknown as {RITEVENUE_ADMIN_EMAIL?:string}).RITEVENUE_ADMIN_EMAIL;return !!email&&user.email.toLowerCase()===email.toLowerCase();}
-export async function apiUser(request?:Request){const user=await getChatGPTUser();if(!user)throw new Error('AUTH');if(request&&request.method!=='GET'&&request.headers.get('origin')!==new URL(request.url).origin)throw new Error('ORIGIN');return user;}
+export function isAdmin(user:AuthUser){return isAdminUser(user);}
+export async function apiUser(request?:Request){const user=await getAuthenticatedUser(request);if(!user)throw new Error('AUTH');if(request&&request.method!=='GET'&&request.headers.get('origin')!==new URL(request.url).origin)throw new Error('ORIGIN');return user;}
 export function apiError(error:unknown){const message=error instanceof Error?error.message:'';const status=message==='AUTH'?401:message==='ORIGIN'||message==='FORBIDDEN'?403:message==='NOT_FOUND'?404:503;return Response.json({error:status===401?'Please open this page in a signed-in browser tab.':status===403?'This action is not allowed for your account.':status===404?'Record not found.':'The demo service is unavailable. Your saved records are unchanged; please retry.'},{status,headers:noStore});}
 export async function readBody(request:Request,form=false){if(!request.headers.get('content-type')?.includes(form?'application/x-www-form-urlencoded':'application/json'))throw new Error('Expected JSON');const reader=request.body?.getReader();if(!reader)throw new Error('Missing body');let text='';let size=0;const decoder=new TextDecoder();try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>32768){await reader.cancel();throw new Error('Body too large');}text+=decoder.decode(value,{stream:true});}text+=decoder.decode();return form?Object.fromEntries(new URLSearchParams(text)):JSON.parse(text);}finally{reader.releaseLock();}}
 // Only approved rows are visible; owner edits reset approval in the draft API.

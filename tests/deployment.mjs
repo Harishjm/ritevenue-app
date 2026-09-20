@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {deploymentValues,prepareCloudflareConfig} from '../scripts/prepare-cloudflare-deploy.mjs';
+
+const stagingValues=deploymentValues('staging',{CLOUDFLARE_STAGING_D1_DATABASE_ID:'00000000-0000-4000-8000-000000000001',CLOUDFLARE_STAGING_R2_BUCKET:'ritevenue-staging-assets',RITEVENUE_ADMIN_EMAIL:'ADMIN@example.test',RITEVENUE_OTP_FROM_EMAIL:'signin@example.test'});
+const productionValues=deploymentValues('production',{CLOUDFLARE_PRODUCTION_D1_DATABASE_ID:'00000000-0000-4000-8000-000000000002',CLOUDFLARE_PRODUCTION_R2_BUCKET:'ritevenue-production-assets',RITEVENUE_ADMIN_EMAIL:'ADMIN@example.test',RITEVENUE_OTP_FROM_EMAIL:'signin@example.test'});
+const source={main:'index.js',route:'obsolete.example.test',vars:{SOURCE_ONLY:'retained'},d1_databases:[{binding:'WRONG'}],r2_buckets:[{binding:'WRONG'}]};
+const staging=prepareCloudflareConfig(source,'staging',stagingValues),production=prepareCloudflareConfig(source,'production',productionValues);
+assert.equal(staging.name,'ritevenue-staging');assert.equal(production.name,'ritevenue-production');assert.notEqual(staging.d1_databases[0].database_id,production.d1_databases[0].database_id);assert.notEqual(staging.r2_buckets[0].bucket_name,production.r2_buckets[0].bucket_name);
+assert.equal(staging.routes,undefined);assert.deepEqual(production.routes,[{pattern:'ritevenue.in',custom_domain:true},{pattern:'www.ritevenue.in',custom_domain:true}]);assert.equal('route' in production,false);
+for(const config of [staging,production]){assert.equal(config.d1_databases[0].binding,'DB');assert.equal(config.r2_buckets[0].binding,'BUCKET');assert.equal(config.send_email[0].name,'AUTH_EMAIL');assert.equal(config.send_email[0].destination_address,'admin@example.test');assert.deepEqual(config.send_email[0].allowed_sender_addresses,['signin@example.test']);assert.equal(config.vars.RITEVENUE_MODE,'public_directory');assert.ok(config.vars.RITEVENUE_DEPLOYMENT.startsWith('standalone_cloudflare_'));assert.ok(!JSON.stringify(config).includes('AUTH_SECRET'));}
+assert.throws(()=>deploymentValues('staging',{}),/required/);assert.throws(()=>deploymentValues('production',{CLOUDFLARE_PRODUCTION_D1_DATABASE_ID:'same',CLOUDFLARE_PRODUCTION_R2_BUCKET:'BAD_BUCKET',RITEVENUE_ADMIN_EMAIL:'bad',RITEVENUE_OTP_FROM_EMAIL:'bad'}),/invalid format/);
+console.log('Passed deployment safety: environment-specific Worker, D1 and R2 configuration, production-only domains, public launch mode, restricted email binding and no authentication secret in generated files.');
