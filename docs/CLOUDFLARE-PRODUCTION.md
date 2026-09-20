@@ -17,8 +17,13 @@ Configure required reviewers on the environment when supported by the repository
 
 Run the **Deploy Cloudflare production** workflow manually and enter the exact
 confirmation `DEPLOY-PRODUCTION`. The workflow validates the application, applies
-D1 migrations, and deploys `ritevenue-production` to workers.dev.
+D1 migrations, and deploys `ritevenue-production`.
 
-The generated configuration deliberately removes custom routes. It does not attach,
-modify, or deploy to `ritevenue.in`. Connecting the public domain is a separate,
-explicit go-live operation.
+The production configuration attaches these Cloudflare Worker Custom Domains:
+
+- `ritevenue.in`
+- `www.ritevenue.in`
+
+Cloudflare must have an active `ritevenue.in` zone, and neither hostname may have
+a conflicting CNAME record. Staging remains isolated on its `workers.dev` URL and
+never receives the production custom domains.
