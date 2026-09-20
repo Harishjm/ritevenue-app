@@ -41,8 +41,16 @@ const config = JSON.parse(await readFile(sourcePath, "utf8"));
 config.name = `ritevenue-${environment}`;
 config.workers_dev = true;
 config.preview_urls = false;
-delete config.routes;
-delete config.route;
+if (environment === "production") {
+  config.routes = [
+    { pattern: "ritevenue.in", custom_domain: true },
+    { pattern: "www.ritevenue.in", custom_domain: true },
+  ];
+  delete config.route;
+} else {
+  delete config.routes;
+  delete config.route;
+}
 config.vars = {
   ...(config.vars ?? {}),
   RITEVENUE_MODE: "public_directory",
