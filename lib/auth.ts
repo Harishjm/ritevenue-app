@@ -10,7 +10,7 @@ type Challenge={id:string;email:string;code_hash:string;attempts:number;expires_
 
 export class AuthError extends Error{constructor(public status:number,message:string){super(message);}}
 
-function settings(){
+export function settings(){
  const values=env as unknown as AuthEnv;
  const adminEmail=normalizeEmail(values.RITEVENUE_ADMIN_EMAIL||'');
  const secret=values.RITEVENUE_AUTH_SECRET||'';
@@ -37,7 +37,7 @@ export function isAdminUser(user:AuthUser){
  try{const {adminEmail}=settings();return user.role==='admin'&&normalizeEmail(user.email)===adminEmail;}catch{return false;}
 }
 
-async function consumeRate(id:string,limit:number,now:number,windowSeconds:number){
+export async function consumeRate(id:string,limit:number,now:number,windowSeconds:number){
  const row=await db().prepare('INSERT INTO auth_rate_limits (id,attempts,expires_at) VALUES (?,1,?) ON CONFLICT(id) DO UPDATE SET attempts=CASE WHEN expires_at<=? THEN 1 ELSE attempts+1 END,expires_at=CASE WHEN expires_at<=? THEN excluded.expires_at ELSE expires_at END RETURNING attempts').bind(id,now+windowSeconds,now,now).first<{attempts:number}>();
  if(!row||row.attempts>limit)throw new AuthError(429,'Too many sign-in attempts. Please wait before trying again.');
 }

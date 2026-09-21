@@ -6,6 +6,8 @@ export const intakeSchema=z.object({
  phone:z.string().trim().regex(/^\+?[0-9 ()-]{8,24}$/,'Enter a valid contact number'),
  capacity:z.number().int().min(1).max(50000),
  notes:z.string().trim().max(2000).default(''),consent:z.literal(true),
+ photoDescriptions:z.array(z.string().trim().min(3).max(160)).max(6).default([]),
+ photoConsent:z.boolean().default(false),
  website:z.string().max(200).default('')
 }).strict();
 export const intakeDataSchema=intakeSchema.omit({requestKey:true,website:true});

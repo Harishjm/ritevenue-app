@@ -1,14 +1,18 @@
 'use client';
+/* eslint-disable @next/next/no-img-element -- Private, pre-optimized photos must retain authenticated no-store requests. */
 import {useEffect,useState} from 'react';
-type Intake={id:string;createdAt:string;status:string;convertedDraftId:string|null;reviewNote:string;reviewedAt:string|null;data:{venueName:string;locality:string;contactName:string;email:string;phone:string;capacity:number;notes:string}};
+type Intake={id:string;createdAt:string;status:string;convertedDraftId:string|null;reviewNote:string;reviewedAt:string|null;photos?:{id:string;url:string;description:string;width:number;height:number;bytes:number}[];data:{venueName:string;locality:string;contactName:string;email:string;phone:string;capacity:number;notes:string}};
 
 export default function VenueIntakeReview(){
 	const [rows,setRows]=useState<Intake[]>([]),[state,setState]=useState('Loading applications…');
 	async function load(){
-		setState('Loading applications…');
 		try{const r=await fetch('/api/venue-applications',{cache:'no-store'});if(!r.ok)throw new Error();const data=await r.json() as {applications:Intake[]};setRows(data.applications);setState(data.applications.length?'':'No public applications yet.');}catch{setState('Could not load applications. Try refreshing.');}
 	}
-	useEffect(()=>{void load();},[]);
+	useEffect(()=>{
+		const controller=new AbortController();
+		fetch('/api/venue-applications',{cache:'no-store',signal:controller.signal}).then(async response=>{if(!response.ok)throw new Error();return response.json() as Promise<{applications:Intake[]}>;}).then(data=>{if(controller.signal.aborted)return;setRows(data.applications);setState(data.applications.length?'':'No public applications yet.');}).catch(()=>{if(!controller.signal.aborted)setState('Could not load applications. Try refreshing.');});
+		return ()=>controller.abort();
+	},[]);
 
 	async function convertIntake(id:string){
 		if(!confirm('Create a draft from this application and assign it to your account?'))return;
@@ -45,6 +49,7 @@ export default function VenueIntakeReview(){
 					<p>{r.data.locality} · {r.data.capacity} guests</p>
 					<p>{r.data.contactName} · {r.data.email} · {r.data.phone}</p>
 					<p className="intake-notes">{r.data.notes}</p>
+					<div className="intake-photo-grid">{r.photos?.map(photo=><figure className="intake-photo-card" key={photo.id}><a href={photo.url} target="_blank" rel="noopener noreferrer"><img src={photo.url} alt={photo.description} width={photo.width} height={photo.height} loading="lazy"/></a><figcaption>{photo.description} · {Math.ceil(photo.bytes/1024)} KB</figcaption></figure>)}</div>
 					{r.reviewNote&&<p className="notice">Review: {r.reviewNote}{r.reviewedAt?` · ${new Date(r.reviewedAt).toLocaleString()}`:''}</p>}
 					<div className="workspace-actions" style={{marginTop:8}}>
 						{r.convertedDraftId?<span className="tag">Draft created · {r.convertedDraftId.slice(0,8)}</span>:r.status==='new'?<><button onClick={()=>void convertIntake(r.id)} className="primary">Create draft</button><button onClick={()=>void reviewIntake(r,'rejected')} className="filter-button">Reject application</button></>:<button onClick={()=>void reviewIntake(r,'new')} className="filter-button">Reopen application</button>}

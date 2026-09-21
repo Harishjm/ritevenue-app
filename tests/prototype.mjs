@@ -5,7 +5,7 @@ import {createRequire} from 'node:module';
 import {DatabaseSync} from 'node:sqlite';
 import assert from 'node:assert/strict';
 const root=resolve('.sites-runtime/prototype-tests');mkdirSync(root,{recursive:true});writeFileSync(resolve(root,'package.json'),'{"type":"commonjs"}');
-for(const file of ['lib/venue-intake.ts','app/api/venue-applications/route.ts','lib/launch.ts','lib/publication.ts','lib/public-venues.ts','app/api/public/[action]/route.ts','lib/venues.ts','lib/catering.ts','lib/catering-server.ts','app/api/catering/[action]/route.ts','lib/booking.ts','lib/owner-venue.ts','lib/db.ts','lib/demo-server.ts','lib/calendar.ts','app/api/demo/[action]/route.ts']){
+for(const file of ['lib/venue-photo.ts','lib/intake-photo-server.ts','lib/venue-intake.ts','app/api/venue-applications/route.ts','lib/launch.ts','lib/publication.ts','lib/public-venues.ts','app/api/public/[action]/route.ts','lib/venues.ts','lib/catering.ts','lib/catering-server.ts','app/api/catering/[action]/route.ts','lib/booking.ts','lib/owner-venue.ts','lib/db.ts','lib/demo-server.ts','lib/calendar.ts','app/api/demo/[action]/route.ts']){
  let source=readFileSync(file,'utf8').replace("import {env} from 'cloudflare:workers';",'const env=globalThis.__testEnv;');
  if(file==='lib/demo-server.ts')source=source.replace("import {getAuthenticatedUser,isAdminUser,type AuthUser} from './auth';",'type AuthUser=any;async function getAuthenticatedUser(){return globalThis.__testUser;}function isAdminUser(user){return user?.email===globalThis.__testEnv.RITEVENUE_ADMIN_EMAIL;}');
  const dest=resolve(root,file.replace(/\.ts$/,'.js'));mkdirSync(dirname(dest),{recursive:true});
@@ -372,3 +372,63 @@ const conversion=await post('convert_intake',{id:receipt.reference});assert.equa
 const convertedDraft=sql.prepare('SELECT owner_id,data_json FROM owner_drafts WHERE id=?').get(converted.id);assert.equal(convertedDraft.owner_id,'admin');assert.equal(JSON.parse(convertedDraft.data_json).rightsConfirmed,false);assert.equal(sql.prepare('SELECT converted_draft_id FROM public_venue_intakes WHERE id=?').get(receipt.reference).converted_draft_id,converted.id);
 const repeatedConversion=await post('convert_intake',{id:receipt.reference});assert.equal(repeatedConversion.status,200);assert.equal((await repeatedConversion.json()).id,converted.id);assert.equal(sql.prepare('SELECT count(*) n FROM owner_drafts WHERE id=?').get(converted.id).n,1);assert.equal((await (await pget('catalog')).json()).venues.length,0);
 console.log('Passed public intake: anonymous submissions, durable idempotency, validation, origin checks, rate limit, admin-only contacts, rejection/reopening, atomic draft conversion, and no automatic publication.');
+
+// Static WebP generated from a 32x24 pixel solid-color image (no private photo data).
+const optimizedWebp=Buffer.from('UklGRjwAAABXRUJQVlA4IDAAAADQAgCdASogABgAPm00lUekIyIhKAgAgA2JZwAAPaOgAP71WL3q//4i6e8AwQAAAAA=','base64');
+const photoDomain=require('./lib/venue-photo.js');assert.deepEqual(photoDomain.inspectOptimizedPhoto(optimizedWebp),{width:32,height:24});
+const canvasExtended=Buffer.concat([optimizedWebp.subarray(0,12),Buffer.from('VP8X'),Buffer.from([10,0,0,0]),Buffer.alloc(10),Buffer.from('ICCP'),Buffer.from([4,0,0,0]),Buffer.from('test'),optimizedWebp.subarray(12)]);canvasExtended.writeUInt32LE(canvasExtended.length-8,4);
+assert.deepEqual(Buffer.from(photoDomain.normalizeCanvasPhoto(canvasExtended)),optimizedWebp);
+assert.deepEqual(Buffer.from(photoDomain.normalizeCanvasPhoto(optimizedWebp)),optimizedWebp);
+assert.throws(()=>photoDomain.inspectOptimizedPhoto(canvasExtended));
+assert.throws(()=>photoDomain.normalizeCanvasPhoto(canvasExtended.subarray(0,-1)));
+const animatedCanvas=Buffer.from(canvasExtended);animatedCanvas.write('ANIM',12);assert.throws(()=>photoDomain.normalizeCanvasPhoto(animatedCanvas));
+const photoIntake={...intake,requestKey:crypto.randomUUID(),photoConsent:true,photoDescriptions:['Main hall and stage']};
+async function submitPhotos(data=photoIntake,files=[new File([optimizedWebp],'photo.webp',{type:'image/webp'})],ip='192.0.2.77',extra={}){
+ const form=new FormData();form.set('application',JSON.stringify(data));for(const file of files)form.append('photos',file);
+ return intakeAPI.POST(new Request(origin+'/api/venue-applications',{method:'POST',headers:{Origin:origin,'cf-connecting-ip':ip,...extra},body:form}));
+}
+const readIntakePhoto=id=>intakeAPI.GET(new Request(origin+'/api/venue-applications?photo='+id));
+globalThis.__testUser=null;
+assert.equal((await submitPhotos(photoIntake,undefined,undefined,{Origin:'https://evil.test'})).status,403);
+assert.equal((await submitPhotos({...photoIntake,photoConsent:false})).status,400);
+assert.equal((await submitPhotos({...photoIntake,photoDescriptions:[]})).status,400);
+assert.equal((await submitPhotos(photoIntake,[new File(['<svg/>'],'photo.webp',{type:'image/webp'})])).status,400);
+assert.equal((await submitPhotos(photoIntake,[new File([optimizedWebp],'photo.jpg',{type:'image/jpeg'})])).status,400);
+assert.equal((await submitPhotos({...photoIntake,photoDescriptions:Array(7).fill('Hall view')},Array.from({length:7},()=>new File([optimizedWebp],'photo.webp',{type:'image/webp'})))).status,400);
+const huge=Buffer.alloc(photoDomain.MAX_PHOTO_BYTES+1);assert.throws(()=>photoDomain.inspectOptimizedPhoto(huge));
+const tooWide=Buffer.from(optimizedWebp);tooWide.writeUInt16LE(2000,26);assert.throws(()=>photoDomain.inspectOptimizedPhoto(tooWide));
+const metadata=Buffer.concat([optimizedWebp,Buffer.from('EXIFdata')]);metadata.writeUInt32LE(metadata.length-8,4);assert.throws(()=>photoDomain.inspectOptimizedPhoto(metadata));
+const uploadsBefore=objects.size;
+const photoResponse=await submitPhotos();assert.equal(photoResponse.status,201);const photoReference=(await photoResponse.json()).reference;
+assert.deepEqual(Object.keys(await (await submitPhotos()).json()),['reference']);assert.equal(objects.size,uploadsBefore+1);
+assert.equal((await submitPhotos({...photoIntake,photoDescriptions:['Different description']})).status,409);
+const photoRecord=sql.prepare('SELECT * FROM intake_photos WHERE intake_id=?').get(photoReference);assert.equal(photoRecord.width,32);assert.equal(photoRecord.bytes,optimizedWebp.length);
+assert.equal((await readIntakePhoto(photoRecord.id)).status,401);assert.equal((await pget('image','?id='+photoRecord.id)).status,404);
+globalThis.__testUser={userId:'stranger',email:'stranger@example.test'};assert.equal((await readIntakePhoto(photoRecord.id)).status,403);
+globalThis.__testUser={userId:'admin',email:'admin@example.test'};const privatePhoto=await readIntakePhoto(photoRecord.id);assert.equal(privatePhoto.status,200);assert.equal(privatePhoto.headers.get('content-type'),'image/webp');assert.equal(privatePhoto.headers.get('x-robots-tag'),'noindex, nofollow');assert.equal(privatePhoto.headers.get('cache-control'),'private, no-store');
+const withPhotos=await (await intakeAPI.GET()).json();const inboxPhoto=withPhotos.applications.find(row=>row.id===photoReference).photos[0];assert.equal(inboxPhoto.description,'Main hall and stage');assert.equal(inboxPhoto.object_key,undefined);
+const photoConversion=await post('convert_intake',{id:photoReference});assert.equal(photoConversion.status,201);const photoDraftId=(await photoConversion.json()).id;
+const photoDraft=JSON.parse(sql.prepare('SELECT data_json FROM owner_drafts WHERE id=?').get(photoDraftId).data_json);assert.deepEqual(photoDraft.images,[photoRecord.id]);assert.equal(photoDraft.publication.consent,false);assert.equal(photoDraft.rightsConfirmed,false);assert.equal((await pget('image','?id='+photoRecord.id)).status,404);
+assert.equal(sql.prepare('SELECT owner_id FROM owner_images WHERE id=?').get(photoRecord.id).owner_id,'admin');assert.equal((await get('image','?id='+photoRecord.id)).status,200);
+assert.equal((await post('convert_intake',{id:photoReference})).status,200);
+// A private upload becomes readable publicly only after explicit consent and approval.
+assert.equal((await post('drafts',{...photoDraft,rightsConfirmed:true,submit:true,publication:{consent:true,calendar:null,calendarUpdatedAt:null}})).status,200);
+const photoUpdatedAt=sql.prepare('SELECT updated_at FROM owner_drafts WHERE id=?').get(photoDraftId).updated_at;
+assert.equal((await post('review',{id:photoDraftId,status:'approved_public',note:'Owner permission and photo rights verified.',expectedUpdatedAt:photoUpdatedAt})).status,200);
+assert.equal((await pget('image','?id='+photoRecord.id)).status,200);
+const publishedPhotoVenue=(await (await pget('catalog')).json()).venues.find(v=>v.slug==='owner-'+photoDraftId);assert.match(publishedPhotoVenue.imageDescriptions[0],/Main hall and stage/);
+assert.equal((await post('drafts',{...photoDraft,rightsConfirmed:true,submit:false})).status,200);assert.equal((await pget('image','?id='+photoRecord.id)).status,404);
+// Storage failures leave a known, private reservation, resumed with the original key.
+const originalPut=globalThis.__testEnv.BUCKET.put;let shouldFail=true;
+globalThis.__testEnv.BUCKET.put=async(...args)=>{if(shouldFail){shouldFail=false;throw new Error('Simulated R2 outage');}return originalPut(...args);};
+const resumable={...photoIntake,requestKey:crypto.randomUUID()};assert.equal((await submitPhotos(resumable)).status,503);
+const reserved=sql.prepare('SELECT id,status FROM public_venue_intakes WHERE request_key=?').get(resumable.requestKey);assert.equal(reserved.status,'uploading');
+const hiddenId=sql.prepare('SELECT id FROM intake_photos WHERE intake_id=?').get(reserved.id).id;assert.equal((await readIntakePhoto(hiddenId)).status,404);assert.equal((await post('convert_intake',{id:reserved.id})).status,409);
+assert.ok(!(await (await intakeAPI.GET()).json()).applications.some(row=>row.id===reserved.id));
+assert.equal((await submitPhotos(resumable)).status,201);assert.equal(sql.prepare('SELECT count(*) n FROM intake_photos WHERE intake_id=?').get(reserved.id).n,1);globalThis.__testEnv.BUCKET.put=originalPut;
+const racedPhoto={...photoIntake,requestKey:crypto.randomUUID()};const racedPhotos=await Promise.all([submitPhotos(racedPhoto),submitPhotos(racedPhoto)]);assert.ok(racedPhotos.every(r=>[200,201].includes(r.status)));assert.equal((await racedPhotos[0].json()).reference,(await racedPhotos[1].json()).reference);
+const failedDatabase={...photoIntake,requestKey:crypto.randomUUID()};const beforeFailure=objects.size;
+sql.exec("CREATE TRIGGER fail_photo_reservation BEFORE INSERT ON intake_photos BEGIN SELECT RAISE(ABORT,'test rollback'); END;");
+assert.equal((await submitPhotos(failedDatabase,undefined,'192.0.2.78')).status,503);sql.exec('DROP TRIGGER fail_photo_reservation');assert.equal(objects.size,beforeFailure);assert.equal(sql.prepare('SELECT id FROM public_venue_intakes WHERE request_key=?').get(failedDatabase.requestKey),undefined);
+for(let i=0;i<30;i++)await submitPhotos({...photoIntake,photoConsent:false},undefined,'192.0.2.79');assert.equal((await submitPhotos(photoIntake,undefined,'192.0.2.79')).status,429);
+console.log('Passed intake photos: WebP size/dimensions/metadata rejection, consent, private reads, admin conversion, publication/withdrawal, descriptions, storage retry, parallel deduplication, atomic reservation and upload rate limiting.');

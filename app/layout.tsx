@@ -1,5 +1,6 @@
 import type {Metadata} from 'next';
 import './globals.css';
+import './wedding-enquiries.css';
 import {Header,Footer} from '@/components/header';
 import {SITE_ORIGIN,publicIndexingEnabled} from '@/lib/launch';
 export function generateMetadata():Metadata{return {metadataBase:new URL(SITE_ORIGIN),title:{default:'RiteVenue | Wedding venues & halls in Bengaluru',template:'%s | RiteVenue'},description:'Explore owner-approved wedding halls, hotels, resorts and party venues in Bengaluru, with photographs and owner-reported calendars.',robots:{index:publicIndexingEnabled(),follow:publicIndexingEnabled()},icons:{icon:'/favicon.svg'}};}

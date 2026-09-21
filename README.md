@@ -12,7 +12,25 @@ Bengaluru venue booking prototype: 20 fictional venues, shared availability, two
 
 **Directory launch only:** no real reservations, payment collection, verified reviews or Google Places calls. Non-production deployments remain private and noindex.
 
-## Booking packages
+## Wedding assistance enquiries
+
+`/plan-your-wedding` is a public, mobile-friendly enquiry form for couples and family members. It records Bengaluru locality preferences, exact/month/flexible dates, approximate guests, food preference, assistance scope, event-planner preference, budget and its scope, name, phone, optional email, preferred contact channel, optional notes and explicit enquiry-contact consent. Submission returns a reference; it does not create a booking, reserve inventory, take payment or subscribe the person to promotions.
+
+The private `/admin/enquiries` inbox has stage filters, pagination, coordinator assignment, a follow-up date, internal notes and an append-only follow-up history. Stages are New, Contacted, Requirements confirmed, Options shared, Booked and Closed. “Booked” is a manual business status for arrangements confirmed separately; it has no inventory/payment effect. Updates use revision checks and an atomic audit transaction. Admin authentication is required for every read and update.
+
+`POST /api/wedding-enquiries` validates structured fields, exact contact consent, dates and body size, checks same origin, deduplicates request keys, and enforces a durable five-per-network-per-day limit. No public endpoint reveals contact details or follow-up notes. The consent version and submission timestamp are retained with each enquiry. Migration `0009_charming_vindicator.sql` creates dedicated enquiry, follow-up event and rate-limit tables.
+
+For the Instagram bio, after deployment use:
+
+```text
+https://www.ritevenue.in/plan-your-wedding?utm_source=instagram&utm_medium=social&utm_campaign=wedding_launch
+```
+
+Only the bounded `utm_source`, `utm_medium` and `utm_campaign` labels are captured; no tracking SDK is added. Labels are visitor-supplied attribution, not trusted identity. Do not put personal information into campaign URLs.
+
+Enquiries are saved directly to D1 and read in the admin inbox. Email/WhatsApp notifications are not sent automatically. Before using this link for real marketing, configure Google administrator sign-in, verify access to the inbox, and assign someone to check it and follow up. See [Google admin setup](docs/GOOGLE-ADMIN-AUTH.md). Email OTP is deferred to Phase 2.
+
+### Retained prototype booking packages
 
 New bookings use a **5% advance**, with the remaining balance shown as payable directly to the venue owner. Payments are simulated.
 
@@ -26,6 +44,12 @@ Each package supports 0–4 extra hours after its end time. Package rentals and 
 Access periods cannot overlap, including on adjacent dates. Previously held and confirmed quotes keep their original agreed terms.
 
 ## Owner submission to listing
+
+The public `/list-your-venue` form accepts up to six optional photographs. JPEG, PNG and WebP source files up to 15 MB are decoded locally, resized to at most 1600 pixels on the longest edge, flattened against white and re-encoded as static WebP at no more than 350 KB each. The form shows before/after sizes, previews and required descriptions. It uploads only the optimized copies, without EXIF/GPS metadata. This is a quality/performance budget, not a Google ranking guarantee or a mandatory SEO file size. No external compression service is needed; HEIC must first be exported as JPEG.
+
+Multipart uploads are bounded before parsing. The server enforces byte, format, dimension and metadata limits, requires photo-supply consent, caps applications at five per network per day and multipart attempts at 30. D1 reserves the application and private R2 keys atomically before storage writes. A partial upload stays in `uploading`, hidden from review/public endpoints and blocked from conversion; retrying the same request and bytes resumes it. Failed/incomplete submissions have tracked D1/R2 records rather than untracked objects. Abandoned reservations currently require reviewed operational cleanup; there is no automatic deletion job.
+
+The admin application inbox previews the private photos. Converting an application transfers the same image IDs into the admin-owned draft in one database transaction. It does not grant public-display consent or publish the venue. Descriptions become image alt text after explicit publication approval. The public image route continues checking current approval on every read, so withdrawal immediately blocks new reads. Migration `0011_dear_lethal_legion.sql` adds private photo metadata. Existing photos uploaded through the older owner workspace are not recompressed by this change.
 
 1. A representative submits the private application at `/list-your-venue`.
 2. The configured administrator opens `/admin`, verifies the submission, and either rejects it or creates a private working draft.
@@ -77,13 +101,14 @@ The development server uses local Cloudflare emulation. Initialize its database 
 pnpm exec wrangler d1 migrations apply DB --local --config wrangler.local.jsonc
 ```
 
-Create an ignored `.dev.vars` file. Use a random value of at least 32 characters for the local authentication secret and a development-only six-digit OTP:
+Create an ignored `.dev.vars` file. Use a random value of at least 32 characters for the local authentication secret and a Google OAuth web client configured for localhost:
 
 ```dotenv
 RITEVENUE_ADMIN_EMAIL=admin@example.test
 RITEVENUE_AUTH_SECRET=replace-with-a-random-local-secret-of-at-least-32-characters
-RITEVENUE_AUTH_DEV_OTP=123456
-RITEVENUE_OTP_FROM_EMAIL=signin@ritevenue.in
+RITEVENUE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+RITEVENUE_GOOGLE_CLIENT_SECRET=your-local-client-secret
+RITEVENUE_GOOGLE_REDIRECT_URI=http://localhost:5173/api/auth/google-callback
 ```
 
 Then start the application:
@@ -92,9 +117,9 @@ Then start the application:
 pnpm dev
 ```
 
-Open http://localhost:5173 and use the configured development email and OTP at `/admin/sign-in`. The fixed development OTP is accepted only on loopback when the deployment is not marked as standalone Cloudflare. Local database records and uploaded files stay in the ignored `.wrangler` directory.
+Open http://localhost:5173/admin/sign-in and use the Google account matching `RITEVENUE_ADMIN_EMAIL` (replace the example address above with a real Google account). No email or fixed-code login endpoint is enabled. Local database records and uploaded files stay in the ignored `.wrangler` directory.
 
-The local database configuration uses a placeholder ID for local emulation only. Do not deploy it or use it against a remote database. Production and staging use separate D1, R2, email and secret bindings.
+The local database configuration uses a placeholder ID for local emulation only. Do not deploy it or use it against a remote database. Production and staging use separate D1, R2, Google OAuth clients and secrets.
 
 ## Checks
 
@@ -104,7 +129,7 @@ pnpm exec tsc --noEmit
 pnpm build
 ```
 
-The tests exercise real handlers against SQLite with a D1 adapter and mocked object storage/email. They cover OTP/session security, hold contention, immutable quotes, account isolation, uploads, application conversion and moderation without external calls.
+The tests exercise real handlers against SQLite with a D1 adapter and mocked Google transport, object storage and legacy email. They cover Google signature/claim checks, OAuth/session security, disabled OTP endpoints, hold contention, immutable quotes, account isolation, uploads, application conversion and moderation without external calls.
 
 The original source passed these checks in the managed environment. Clean-clone local startup and browser testing have not been verified here. If local startup reports missing tables, rerun the migration command with the development server stopped. Do not run older validation scripts as the current booking suite; some cover retired enquiry/Google flows.
 
