@@ -8,5 +8,8 @@ declare namespace Cloudflare {
     RITEVENUE_AUTH_DEV_OTP?: string;
     RITEVENUE_OTP_FROM_EMAIL?: string;
     RITEVENUE_DEPLOYMENT?: string;
+    RITEVENUE_GOOGLE_CLIENT_ID?: string;
+    RITEVENUE_GOOGLE_CLIENT_SECRET?: string;
+    RITEVENUE_GOOGLE_REDIRECT_URI?: string;
   }
 }

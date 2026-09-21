@@ -11,9 +11,9 @@ Create a protected GitHub environment named `production` with these values:
 - Secret `CLOUDFLARE_PRODUCTION_D1_DATABASE_ID`
 - Secret `RITEVENUE_ADMIN_EMAIL`
 - Variable `CLOUDFLARE_PRODUCTION_R2_BUCKET=ritevenue-production-assets`
-- Variable `RITEVENUE_OTP_FROM_EMAIL`
+- Variable `RITEVENUE_GOOGLE_CLIENT_ID`
 
-Set `RITEVENUE_AUTH_SECRET` directly as a secret on `ritevenue-production`; do not reuse the staging value. Configure the `AUTH_EMAIL` binding only after Email Sending is onboarded. Preserve all Hostinger root mail records. Email Routing is outside this deployment and must remain disabled unless a separate mail-migration decision is approved.
+Set `RITEVENUE_AUTH_SECRET` and `RITEVENUE_GOOGLE_CLIENT_SECRET` directly as secrets on `ritevenue-production`; do not reuse staging values. Follow [Google admin setup](GOOGLE-ADMIN-AUTH.md) to register the production callback and administrator account. Email OTP is deferred to Phase 2, so `AUTH_EMAIL` is no longer configured and Email Sending onboarding is unnecessary. Preserve all Hostinger root mail records. Email Routing must remain disabled unless a separate mail-migration decision is approved.
 
 Configure required reviewers on the environment when supported by the repository plan.
 

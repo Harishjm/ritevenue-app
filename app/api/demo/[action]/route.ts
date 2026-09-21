@@ -11,6 +11,7 @@ export const dynamic='force-dynamic';
 const json=(data:unknown,status=200)=>Response.json(data,{status,headers:noStore});
 import {draftSchema} from '@/lib/owner-venue';
 import {intakeDataSchema} from '@/lib/venue-intake';
+import {intakePhotoRows} from '@/lib/intake-photo-server';
 function bucket(){const b=(env as unknown as {BUCKET?:R2Bucket}).BUCKET;if(!b)throw new Error('Storage unavailable');return b;}
 export async function GET(request:Request,{params}:{params:Promise<{action:string}>}){
  try{const user=await apiUser();const {action}=await params;const url=new URL(request.url);if(isPublicDirectory()&&['catalog','calendar'].includes(action)&&!isAdmin(user))throw new Error('FORBIDDEN');const database=db();const now=Math.floor(Date.now()/1000);
@@ -112,9 +113,11 @@ export async function POST(request:Request,{params}:{params:Promise<{action:stri
     if(intake.status!=='new')return reply({error:'This application cannot be converted in its current state.'},409);
     const data=intakeDataSchema.safeParse(JSON.parse(intake.data_json));if(!data.success)return reply({error:'The application data is invalid.'},409);
     const draftId=crypto.randomUUID(),stamp=new Date().toISOString(),description=data.data.notes.length>=40?data.data.notes:`Application received from ${data.data.contactName}. Complete and verify the venue description before requesting publication.`;
-    const draft=draftSchema.parse({id:draftId,name:data.data.venueName.slice(0,100),locality:data.data.locality.slice(0,100),address:`${data.data.locality}, Bengaluru`,type:'Wedding hall',capacity:data.data.capacity,description,pricing:{rent:10000000,ac:0,generator:0,parking:0,cleaning:0},images:[],cateringPolicy:{},publication:{consent:false,calendar:null,calendarUpdatedAt:null},rightsConfirmed:false,submit:false});
+    const photos=await intakePhotoRows(parsed.data.id);
+    const draft=draftSchema.parse({id:draftId,name:data.data.venueName.slice(0,100),locality:data.data.locality.slice(0,100),address:`${data.data.locality}, Bengaluru`,type:'Wedding hall',capacity:data.data.capacity,description,pricing:{rent:10000000,ac:0,generator:0,parking:0,cleaning:0},images:photos.map(photo=>photo.id),cateringPolicy:{},publication:{consent:false,calendar:null,calendarUpdatedAt:null},rightsConfirmed:false,submit:false});
     await database.batch([
      database.prepare("INSERT INTO owner_drafts (id,owner_id,data_json,status,review_note,created_at,updated_at) SELECT ?,?,?,\'draft\',\'\',?,? WHERE EXISTS (SELECT 1 FROM public_venue_intakes WHERE id=? AND status=\'new\' AND converted_draft_id IS NULL)").bind(draftId,user.userId,JSON.stringify(draft),stamp,stamp,parsed.data.id),
+     ...photos.map(photo=>database.prepare("INSERT INTO owner_images (id,owner_id,object_key,content_type,created_at) SELECT ?,?,?,'image/webp',? WHERE EXISTS (SELECT 1 FROM owner_drafts WHERE id=?)").bind(photo.id,user.userId,photo.object_key,stamp,draftId)),
      database.prepare("UPDATE public_venue_intakes SET status=\'converted\',converted_draft_id=? WHERE id=? AND status=\'new\' AND EXISTS (SELECT 1 FROM owner_drafts WHERE id=?)").bind(draftId,parsed.data.id,draftId)
     ]);
     const converted=await database.prepare('SELECT converted_draft_id FROM public_venue_intakes WHERE id=?').bind(parsed.data.id).first<{converted_draft_id:string|null}>();if(!converted?.converted_draft_id)return reply({error:'The application changed. Refresh and try again.'},409);

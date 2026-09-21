@@ -28,7 +28,7 @@ flowchart TD
 | Migrations | `drizzle/` | Ordered schema changes applied by Wrangler |
 | Files | R2 through `BUCKET` | Private owner-uploaded photographs |
 | Database | D1 through `DB` | Applications, drafts, calendars and retained prototype data |
-| Authentication | D1 sessions and `AUTH_EMAIL` | Single-use administrator OTP and secure sessions |
+| Authentication | Google OAuth and D1 sessions | Allowlisted Google administrator account and secure sessions; OTP deferred to Phase 2 |
 
 ## Trust boundaries
 
@@ -36,7 +36,7 @@ flowchart TD
 - Public submissions are validated, same-origin checked, rate-limited and never automatically published.
 - Owner photos are served publicly only when referenced by an approved listing with publication consent.
 - Administrator status is an authorization decision after authentication.
-- OTP values are HMAC-protected, session tokens are stored only as SHA-256 hashes, and browser sessions use HTTP-only cookies.
+- Google sign-in verifies signed identity tokens, browser-bound one-time state, PKCE, nonce and the administrator allowlist. Session tokens are stored only as SHA-256 hashes and browser sessions use HTTP-only cookies. Legacy OTP code remains inaccessible through public endpoints.
 - Runtime secrets belong in the hosting platform or GitHub environment secrets, never in source control.
 
 ## Environments

@@ -1,4 +1,19 @@
 import {sqliteTable,text,integer,index,uniqueIndex} from 'drizzle-orm/sqlite-core';
+export const intakePhotos=sqliteTable('intake_photos',{id:text('id').primaryKey(),intakeId:text('intake_id').notNull().references(()=>publicVenueIntakes.id),position:integer('position').notNull(),objectKey:text('object_key').notNull(),description:text('description').notNull(),width:integer('width').notNull(),height:integer('height').notNull(),bytes:integer('bytes').notNull(),sha256:text('sha256').notNull()},t=>[uniqueIndex('idx_intake_photo_position').on(t.intakeId,t.position)]);
+export const authGoogleFlows=sqliteTable('auth_google_flows',{id:text('id').primaryKey(),browserHash:text('browser_hash').notNull(),nonce:text('nonce').notNull(),returnTo:text('return_to').notNull(),expiresAt:integer('expires_at').notNull()},t=>[index('idx_auth_google_flow_expiry').on(t.expiresAt)]);
+export const authGoogleIdentities=sqliteTable('auth_google_identities',{email:text('email').primaryKey(),subject:text('subject').notNull().unique()});
+// Private planning enquiries are independent of listings, inventory and payments.
+export const weddingEnquiries=sqliteTable('wedding_enquiries',{
+ id:text('id').primaryKey(),requestKey:text('request_key').notNull().unique(),payloadHash:text('payload_hash').notNull(),
+ dataJson:text('data_json').notNull(),status:text('status').notNull().default('new'),coordinator:text('coordinator').notNull().default(''),
+ followUpOn:text('follow_up_on').notNull().default(''),revision:text('revision').notNull(),consentVersion:text('consent_version').notNull(),
+ createdAt:text('created_at').notNull(),updatedAt:text('updated_at').notNull()
+},t=>[index('idx_wedding_enquiry_created').on(t.createdAt,t.id),index('idx_wedding_enquiry_status_created').on(t.status,t.createdAt,t.id)]);
+export const weddingEnquiryLimits=sqliteTable('wedding_enquiry_limits',{id:text('id').primaryKey(),attempts:integer('attempts').notNull(),expiresAt:integer('expires_at').notNull()},t=>[index('idx_wedding_enquiry_limit_expiry').on(t.expiresAt)]);
+export const weddingEnquiryEvents=sqliteTable('wedding_enquiry_events',{
+ id:text('id').primaryKey(),enquiryId:text('enquiry_id').notNull().references(()=>weddingEnquiries.id),actorId:text('actor_id').notNull(),
+ status:text('status').notNull(),note:text('note').notNull(),coordinator:text('coordinator').notNull(),followUpOn:text('follow_up_on').notNull(),createdAt:text('created_at').notNull()
+},t=>[index('idx_wedding_enquiry_event_created').on(t.enquiryId,t.createdAt)]);
 // Unverified public onboarding submissions; never included in the published venue catalog.
 export const publicVenueIntakes=sqliteTable('public_venue_intakes',{id:text('id').primaryKey(),requestKey:text('request_key').notNull().unique(),payloadHash:text('payload_hash').notNull(),dataJson:text('data_json').notNull(),status:text('status').notNull().default('new'),convertedDraftId:text('converted_draft_id'),reviewNote:text('review_note').notNull().default(''),reviewedBy:text('reviewed_by'),reviewedAt:text('reviewed_at'),createdAt:text('created_at').notNull()},t=>[index('idx_public_intake_created').on(t.createdAt)]);
 export const publicIntakeLimits=sqliteTable('public_intake_limits',{id:text('id').primaryKey(),attempts:integer('attempts').notNull(),expiresAt:integer('expires_at').notNull()},t=>[index('idx_public_intake_limit_expiry').on(t.expiresAt)]);

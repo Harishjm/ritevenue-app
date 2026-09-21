@@ -27,7 +27,7 @@ jobs:
       CLOUDFLARE_STAGING_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_STAGING_D1_DATABASE_ID }}
       CLOUDFLARE_STAGING_R2_BUCKET: ${{ vars.CLOUDFLARE_STAGING_R2_BUCKET }}
       RITEVENUE_ADMIN_EMAIL: ${{ secrets.RITEVENUE_ADMIN_EMAIL }}
-      RITEVENUE_OTP_FROM_EMAIL: ${{ vars.RITEVENUE_OTP_FROM_EMAIL }}
+      RITEVENUE_GOOGLE_CLIENT_ID: ${{ vars.RITEVENUE_GOOGLE_CLIENT_ID }}
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v4

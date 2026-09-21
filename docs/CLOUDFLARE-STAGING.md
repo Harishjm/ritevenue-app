@@ -4,7 +4,7 @@ This is a preparation path for an independently owned Cloudflare account. It doe
 
 ## Current boundary
 
-The public directory and administrator workspace run as a standalone Cloudflare Worker. Administrator authentication uses a single-use email code, D1-backed challenges and sessions, and an HTTP-only session cookie. Owner self-service authentication is not enabled yet.
+The public directory and administrator workspace run as a standalone Cloudflare Worker. Administrator authentication uses Google sign-in restricted to the configured email, D1-backed OAuth flows and sessions, and an HTTP-only session cookie. Owner self-service authentication is not enabled yet. Email OTP is deferred to Phase 2.
 
 ## One-time Cloudflare setup
 
@@ -20,9 +20,9 @@ Complete these steps in a Cloudflare account owned by Harish:
    - `CLOUDFLARE_API_TOKEN`
    - `CLOUDFLARE_STAGING_D1_DATABASE_ID`
    - `RITEVENUE_ADMIN_EMAIL`
-7. Add environment variables `CLOUDFLARE_STAGING_R2_BUCKET` and `RITEVENUE_OTP_FROM_EMAIL`.
+7. Add environment variables `CLOUDFLARE_STAGING_R2_BUCKET` and `RITEVENUE_GOOGLE_CLIENT_ID`.
 8. Set the Worker secret `RITEVENUE_AUTH_SECRET` to an independently generated value of at least 32 characters. Staging and production must use different values.
-9. Onboard only **Email Sending** for the selected sender domain and bind it as `AUTH_EMAIL`. Review every DNS change before approval. Do not enable Email Routing and do not replace, delete or proxy Hostinger MX, SPF, DKIM, DMARC, autoconfig or autodiscover records. Cloudflare Email Sending uses bounce records on its own subdomain, but its proposed DMARC change must still be compared with the existing record.
+9. Set Worker secret `RITEVENUE_GOOGLE_CLIENT_SECRET` and register the staging callback in Google Cloud following [Google admin setup](GOOGLE-ADMIN-AUTH.md). No email binding is required. Do not enable Email Routing or replace, delete or proxy Hostinger mail records.
 
 Do not put tokens, account IDs, database IDs, or production data in committed files.
 
@@ -34,7 +34,7 @@ The workflow is manual. A push to `main` runs validation but does not deploy.
 
 ## Authentication expectation
 
-Test `/admin/sign-in`, resend throttling, invalid and expired codes, logout, and direct access to admin APIs. Only the configured address can receive a working challenge. A signed-in session also carries an explicit administrator role; email verification alone does not grant access to other addresses. `/owner` remains an administrator-operated workspace until owner authentication and ownership migration are implemented.
+Test `/admin/sign-in`, Google account selection, rejection of unapproved accounts, cancellation, logout, and direct access to admin APIs. Only the configured Google account can obtain an admin session. Email OTP endpoints return 404. `/owner` remains an administrator-operated workspace until owner authentication and ownership migration are implemented.
 
 ## Database migration and backup
 
@@ -63,7 +63,7 @@ Production rollback must be rehearsed in staging before DNS is changed.
 
 The production workflow exists but must not be run until:
 
-- administrator OTP has passed staging tests;
+- administrator Google sign-in has passed staging tests;
 - staging tests pass;
 - D1 and R2 migration rehearsal succeeds;
 - backups and rollback are verified;
