@@ -65,7 +65,8 @@ export async function finishGoogleSignIn(request:Request){
  const code=url.searchParams.get('code');
  if(!code||code.length>4096)throw new AuthError(400,'Start sign-in again.');
  const response=await fetch('https://oauth2.googleapis.com/token',{
-  method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},redirect:'error',signal:AbortSignal.timeout(10000),
+  // workerd supports manual/follow only. Never follow a redirect with OAuth credentials.
+  method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},redirect:'manual',signal:AbortSignal.timeout(10000),
   body:new URLSearchParams({code,client_id:config.clientId,client_secret:config.clientSecret,redirect_uri:config.redirectUri.href,grant_type:'authorization_code',code_verifier:await otpHash(config.secret,state,browserToken,'google-pkce')})
  });
  if(!response.ok)throw new AuthError(503,'Google sign-in could not be completed.');

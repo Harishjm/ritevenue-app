@@ -57,7 +57,7 @@ async function mockToken(flow,claims={},signingKey=keyPair.privateKey){
  const now=Math.floor(Date.now()/1000),payload={sub:'google-admin-id',email:'ADMIN@example.test',email_verified:true,nonce:flow.authorization.searchParams.get('nonce'),iss:'https://accounts.google.com',aud:globalThis.__testEnv.RITEVENUE_GOOGLE_CLIENT_ID,iat:now,exp:now+300,...claims};
  const token=await new SignJWT(payload).setProtectedHeader({alg:'RS256',kid:'test-key'}).sign(signingKey);
  globalThis.fetch=async(url,options)=>{
-  exchangeCalls++;assert.equal(url,'https://oauth2.googleapis.com/token');assert.equal(options.redirect,'error');
+  exchangeCalls++;assert.equal(url,'https://oauth2.googleapis.com/token');assert.equal(options.redirect,'manual');
   const params=options.body;assert.equal(params.get('client_secret'),'test-client-secret');assert.equal(params.get('redirect_uri'),globalThis.__testEnv.RITEVENUE_GOOGLE_REDIRECT_URI);
   const verifier=params.get('code_verifier'),digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier));
   assert.equal(Buffer.from(digest).toString('base64url'),flow.authorization.searchParams.get('code_challenge'));
