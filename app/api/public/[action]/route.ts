@@ -5,8 +5,8 @@ import {publicVenues,publicVenue} from '@/lib/public-venues';
 export const dynamic='force-dynamic';
 const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
 export async function GET(request:Request,{params}:{params:Promise<{action:string}>}){try{const {action}=await params;const url=new URL(request.url);
- if(action==='catalog')return Response.json({venues:await publicVenues()},{headers});
- if(action==='calendar'){const venue=await publicVenue(url.searchParams.get('venue')||'');if(!venue)return Response.json({error:'Venue not found'},{status:404,headers});return Response.json({calendar:venue.calendar,updatedAt:venue.calendarUpdatedAt,notice:'Owner-reported dates only. No date is reserved through this website.'},{headers});}
+ if(action==='catalog'){const venues=await publicVenues();return Response.json({venues:venues.map(venue=>venue.authorizationSource==='admin'?{...venue,pricing:null,cateringPolicy:null}:venue)},{headers});}
+ if(action==='calendar'){const venue=await publicVenue(url.searchParams.get('venue')||'');if(!venue)return Response.json({error:'Venue not found'},{status:404,headers});return Response.json({calendar:venue.calendar,updatedAt:venue.calendarUpdatedAt,notice:'Reported dates only. No date is reserved through this website.'},{headers});}
  if(action==='image'){
   const id=url.searchParams.get('id');if(!z.string().uuid().safeParse(id).success)return new Response('Not found',{status:404,headers});
   const row=await db().prepare("SELECT i.object_key,i.content_type FROM owner_images i WHERE i.id=? AND EXISTS (SELECT 1 FROM owner_drafts d,json_each(d.data_json,'$.images') photo WHERE d.owner_id=i.owner_id AND d.status='approved_public' AND json_extract(d.data_json,'$.publication.consent')=1 AND photo.value=i.id)").bind(id).first<{object_key:string;content_type:string}>();

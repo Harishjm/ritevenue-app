@@ -13,6 +13,10 @@ import {draftSchema} from '@/lib/owner-venue';
 import {intakeDataSchema} from '@/lib/venue-intake';
 import {intakePhotoRows} from '@/lib/intake-photo-server';
 function bucket(){const b=(env as unknown as {BUCKET?:R2Bucket}).BUCKET;if(!b)throw new Error('Storage unavailable');return b;}
+async function independentlySuppliedPhotos(database:ReturnType<typeof db>,ids:string[],ownerId:string){
+ for(const id of ids){const image=await database.prepare('SELECT object_key FROM owner_images WHERE id=? AND owner_id=?').bind(id,ownerId).first<{object_key:string}>();if(!image?.object_key.startsWith('owner-images/'))return false;}
+ return ids.length>0;
+}
 export async function GET(request:Request,{params}:{params:Promise<{action:string}>}){
  try{const user=await apiUser();const {action}=await params;const url=new URL(request.url);if(isPublicDirectory()&&['catalog','calendar'].includes(action)&&!isAdmin(user))throw new Error('FORBIDDEN');const database=db();const now=Math.floor(Date.now()/1000);
   if(action==='session')return json({admin:isAdmin(user),name:user.displayName});
@@ -67,7 +71,7 @@ export async function POST(request:Request,{params}:{params:Promise<{action:stri
    if(!parsed.success)return reply({error:'Check the calendar dates and unavailable dates.'},400);
    const d=parsed.data;const current=await database.prepare("SELECT data_json FROM owner_drafts WHERE id=? AND owner_id=? AND status='approved_public' AND updated_at=?").bind(d.id,user.userId,d.expectedUpdatedAt).first<{data_json:string}>();
    if(!current)return reply({error:'This listing changed, is not public, or belongs to another account. Refresh and reopen it.'},409);
-   const data=draftSchema.parse(JSON.parse(current.data_json));data.publication.calendar=d.calendar;data.publication.calendarUpdatedAt=d.calendar?new Date().toISOString():null;
+   const data=draftSchema.parse(JSON.parse(current.data_json));if(data.publication.source==='admin'&&d.calendar!==null)return reply({error:'Admin-direct availability remains unconfirmed until the venue verifies it.'},400);data.publication.calendar=d.calendar;data.publication.calendarUpdatedAt=d.calendar?new Date().toISOString():null;
    const result=await database.prepare("UPDATE owner_drafts SET data_json=?,updated_at=? WHERE id=? AND owner_id=? AND status='approved_public' AND updated_at=? AND data_json=? RETURNING id").bind(JSON.stringify(data),new Date().toISOString(),d.id,user.userId,d.expectedUpdatedAt,current.data_json).first();
    if(!result)return reply({error:'This calendar changed. Refresh before trying again.'},409);return reply({saved:true});
   }
@@ -77,8 +81,10 @@ export async function POST(request:Request,{params}:{params:Promise<{action:stri
   }
   if(action==='drafts'){
    const parsed=draftSchema.safeParse(body);if(!parsed.success)return reply({error:parsed.error.issues[0].message},400);const d=parsed.data;d.publication.calendarUpdatedAt=d.publication.calendar?new Date().toISOString():null;
+   if(d.publication.source==='admin'&&!isAdmin(user))return reply({error:'Only an administrator may prepare an admin-direct listing.'},403);
    for(const id of d.images){const image=await database.prepare('SELECT id FROM owner_images WHERE id=? AND owner_id=?').bind(id,user.userId).first();if(!image)return reply({error:'Choose images uploaded by your account.'},400);}
    if(d.submit&&!d.images.length)return reply({error:'Add at least one image before submitting for review.'},400);
+   if(d.submit&&d.publication.source==='admin'&&d.publication.consent&&(d.publication.calendar!==null||d.publication.authorizationNote.length<20||!await independentlySuppliedPhotos(database,d.images,user.userId)))return reply({error:'For an admin-direct public listing, leave availability unconfirmed, describe content rights and upload independently licensed photos. Application photos are for private review only.'},400);
    const stamp=new Date().toISOString();const saved=await database.prepare("INSERT INTO owner_drafts (id,owner_id,data_json,status,review_note,created_at,updated_at) VALUES (?,?,?,?,'',?,?) ON CONFLICT(id) DO UPDATE SET data_json=excluded.data_json,status=excluded.status,review_note='',updated_at=excluded.updated_at WHERE owner_drafts.owner_id=excluded.owner_id RETURNING id").bind(d.id,user.userId,JSON.stringify(d),d.submit?'pending_review':'draft',stamp,stamp).first();if(!saved)throw new Error('FORBIDDEN');return reply({id:d.id,status:d.submit?'pending_review':'draft'});
   }
   if(action==='review'){
@@ -89,7 +95,11 @@ export async function POST(request:Request,{params}:{params:Promise<{action:stri
     if(!pending)return reply({error:'This draft changed. Refresh before publishing.'},409);
     reviewedPayload=pending.data_json;
     const d=draftSchema.safeParse(JSON.parse(pending.data_json));
-    if(!d.success||!d.data.publication.consent||!d.data.images.length)return reply({error:'Public publication requires explicit owner consent and owner-supplied photos.'},400);
+    if(!d.success||!d.data.publication.consent||!d.data.images.length)return reply({error:'Public publication requires a selected authorization route and photos.'},400);
+    if(d.data.publication.source==='admin'){
+     const owner=await database.prepare('SELECT owner_id FROM owner_drafts WHERE id=?').bind(parsed.data.id).first<{owner_id:string}>();
+     if(owner?.owner_id!==user.userId||d.data.publication.calendar!==null||d.data.publication.authorizationNote.length<20||!await independentlySuppliedPhotos(database,d.data.images,user.userId))return reply({error:'Admin-direct publication requires unconfirmed availability, recorded content rights and independently supplied photos.'},400);
+    }
    }
    const eventId=crypto.randomUUID(),nowStamp=new Date().toISOString(),stamp=nowStamp===parsed.data.expectedUpdatedAt?new Date(Date.now()+1).toISOString():nowStamp;
    await database.batch([

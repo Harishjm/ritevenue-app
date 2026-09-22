@@ -52,7 +52,7 @@ export default function VenueIntakeReview(){
 					<div className="intake-photo-grid">{r.photos?.map(photo=><figure className="intake-photo-card" key={photo.id}><a href={photo.url} target="_blank" rel="noopener noreferrer"><img src={photo.url} alt={photo.description} width={photo.width} height={photo.height} loading="lazy"/></a><figcaption>{photo.description} · {Math.ceil(photo.bytes/1024)} KB</figcaption></figure>)}</div>
 					{r.reviewNote&&<p className="notice">Review: {r.reviewNote}{r.reviewedAt?` · ${new Date(r.reviewedAt).toLocaleString()}`:''}</p>}
 					<div className="workspace-actions" style={{marginTop:8}}>
-						{r.convertedDraftId?<span className="tag">Draft created · {r.convertedDraftId.slice(0,8)}</span>:r.status==='new'?<><button onClick={()=>void convertIntake(r.id)} className="primary">Create draft</button><button onClick={()=>void reviewIntake(r,'rejected')} className="filter-button">Reject application</button></>:<button onClick={()=>void reviewIntake(r,'new')} className="filter-button">Reopen application</button>}
+						{r.convertedDraftId?<a className="filter-button" href="#admin-drafts">Edit draft · {r.convertedDraftId.slice(0,8)}</a>:r.status==='new'?<><button onClick={()=>void convertIntake(r.id)} className="primary">Create draft</button><button onClick={()=>void reviewIntake(r,'rejected')} className="filter-button">Reject application</button></>:<button onClick={()=>void reviewIntake(r,'new')} className="filter-button">Reopen application</button>}
 					</div>
 					<small>Received {r.createdAt.slice(0,10)} · {r.id}</small>
 				</article>
