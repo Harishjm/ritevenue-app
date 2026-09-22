@@ -41,6 +41,8 @@ jobs:
       - run: pnpm test
       - run: pnpm exec tsc --noEmit
       - run: pnpm build
+      - name: Verify Google auth in the built Cloudflare Worker
+        run: node tests/auth-worker.mjs
       - name: Prepare production configuration
         run: pnpm cloudflare:prepare:production
       - name: Apply production database migrations

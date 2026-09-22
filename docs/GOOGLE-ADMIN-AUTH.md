@@ -27,6 +27,8 @@ Migration `0010_violet_tarantula.sql` adds the flow and identity tables. Apply m
 
 ## Verification before launch
 
+After `pnpm build`, run `node tests/auth-worker.mjs`. Both deployment workflows run this check before migrations. It exercises the built application in Cloudflare's local workerd runtime with real local D1 and synthetic Google token/key responses: sign-in, session creation, replay rejection and rejection of token-endpoint redirects. It never reads production credentials or calls Google. Cloudflare requires `redirect: 'manual'` for the token exchange; `redirect: 'error'` throws before the request is sent. Non-success responses, including redirects, are rejected without forwarding credentials.
+
 Run `pnpm test`, `pnpm exec tsc --noEmit` and `pnpm build`. Tests mock Google's transport and public-key source but verify genuinely signed JWTs with the real verification library. They cover invalid signatures/claims, wrong accounts, state/cookie mismatch, replay, concurrent callbacks, PKCE, provider errors, safe return URLs, throttling, session logout and disabled OTP routes.
 
 After Google configuration and an authorized staging deployment, manually verify a complete real Google login, refusal of a second unapproved account, cancellation, sign-out, private enquiry access and host redirect. Mocked tests cannot prove the Cloud account configuration is correct. Do not log authorization codes, cookies, client secrets or tokens during troubleshooting.
