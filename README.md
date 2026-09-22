@@ -2,9 +2,9 @@
 
 ## Public directory launch — 16 September 2026
 
-The current public experience supports owner-authorized venue listings and read-only, owner-reported calendars. Checkout, holds, confirmation and catering attachment/estimate endpoints are disabled in the default launch mode. Fictional fixtures and private-demo approvals are excluded from public pages and APIs. Earlier sections below describe the retained private prototype history.
+The current public experience supports two clearly labelled publication routes: owner-approved listings and administrator-curated listings with independently held content and photo rights. Calendars are read-only and identified by their reporting source. Checkout, holds, confirmation and catering attachment/estimate endpoints are disabled in the default launch mode. Fictional fixtures and private-demo approvals are excluded from public pages and APIs. Earlier sections below describe the retained private prototype history.
 
-Venue representatives apply through `/list-your-venue`. The administrator signs in with an emailed one-time code, reviews the private application, and may convert it into an unpublished working draft. Owner self-service authentication is still planned. Calendar information over seven days old, missing dates and dates outside the supplied range appear unconfirmed. No live inventory synchronization is claimed.
+Venue representatives apply through `/list-your-venue`. The administrator signs in with the configured Google account, reviews the private application, and may convert it into an unpublished working draft. Owner self-service authentication is still planned. Calendar information over seven days old, missing dates and dates outside the supplied range appear unconfirmed. No live inventory synchronization is claimed.
 
 The public root, planning guides, approved venue pages, robots and sitemap support search discovery in production. Search Console verification/submission and indexing are separate steps; rankings and indexing are not guaranteed. Staging and local environments emit noindex metadata and disallow crawling. Private workspaces and historical receipts still require sign-in and ownership/admin authorization. The default RITEVENUE_MODE is the public directory; do not set private_demo on a public deployment. The legacy regression tests use that value only inside their isolated mock environment before switching to the real public default for boundary tests.
 
@@ -53,11 +53,11 @@ The admin application inbox previews the private photos. Converting an applicati
 
 1. A representative submits the private application at `/list-your-venue`.
 2. The configured administrator opens `/admin`, verifies the submission, and either rejects it or creates a private working draft.
-3. The administrator completes the draft, records authorization and owner-supplied photos, then submits it for review.
-4. A review can request changes, reject the submission, approve it for the private demo, or publish it when explicit public-display consent and photos are present.
+3. The administrator edits the converted draft on `/admin` and selects either owner-approved publication or admin-direct publication. Admin-direct publication requires a written rights/verification note and independently supplied photos; private application photos cannot be used for that route.
+4. A review can request changes, reject the submission, approve it for the private demo, or publish it when the selected authorization route and photos pass the checks.
 5. Saving an approved draft hides it until another review. Existing demo bookings and locked quotes remain saved.
 
-Drafts and photographs remain private until the administrator explicitly approves an owner-authorized submission for public display. Approval does not enable payments.
+Drafts and photographs remain private until the administrator explicitly approves publication. Admin-direct listings are labelled as RiteVenue-curated, not owner-approved. Their prices, catering policies and availability are not published until venue-verified; the public calendar shows unconfirmed dates. Approval does not enable payments.
 
 ## Catering pilot
 

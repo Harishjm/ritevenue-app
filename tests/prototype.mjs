@@ -411,6 +411,21 @@ const photoConversion=await post('convert_intake',{id:photoReference});assert.eq
 const photoDraft=JSON.parse(sql.prepare('SELECT data_json FROM owner_drafts WHERE id=?').get(photoDraftId).data_json);assert.deepEqual(photoDraft.images,[photoRecord.id]);assert.equal(photoDraft.publication.consent,false);assert.equal(photoDraft.rightsConfirmed,false);assert.equal((await pget('image','?id='+photoRecord.id)).status,404);
 assert.equal(sql.prepare('SELECT owner_id FROM owner_images WHERE id=?').get(photoRecord.id).owner_id,'admin');assert.equal((await get('image','?id='+photoRecord.id)).status,200);
 assert.equal((await post('convert_intake',{id:photoReference})).status,200);
+const adminRights={consent:true,source:'admin',authorizationNote:'RiteVenue created and independently licensed these venue photographs.',calendar:null,calendarUpdatedAt:null};
+assert.equal((await post('drafts',{...photoDraft,rightsConfirmed:true,submit:true,publication:adminRights})).status,400,'Private application photos cannot become admin-direct public photos');
+const directUpload=await api.POST(new Request(origin+'/api/demo/images',{method:'POST',headers:{Origin:origin,'Content-Type':'image/jpeg'},body:bytes}),{params:Promise.resolve({action:'images'})});assert.equal(directUpload.status,201);
+const directPhoto=(await directUpload.json()).id,directId=crypto.randomUUID();
+const directDraft={...photoDraft,id:directId,images:[directPhoto],rightsConfirmed:true,submit:true,publication:adminRights};
+globalThis.__testUser={userId:'stranger',email:'stranger@example.test'};assert.equal((await post('drafts',directDraft)).status,403,'Only admins may use the direct-publication route');globalThis.__testUser={userId:'admin',email:'admin@example.test'};
+assert.equal((await post('drafts',{...directDraft,publication:{...adminRights,authorizationNote:'Too short'}})).status,400);
+assert.equal((await post('drafts',{...directDraft,publication:{...adminRights,calendar:{from:'2026-10-01',to:'2026-10-02',unavailable:[]}}})).status,400,'Unverified admin-direct dates cannot be published');
+assert.equal((await post('drafts',directDraft)).status,200);
+assert.ok((await (await get('drafts')).json()).drafts.some(row=>row.id===directId));
+assert.equal((await post('review',{id:directId,status:'approved_public',note:'Independent content and image rights verified.',expectedUpdatedAt:sql.prepare('SELECT updated_at FROM owner_drafts WHERE id=?').get(directId).updated_at})).status,200);
+assert.equal((await pget('image','?id='+directPhoto)).status,200);
+const publicDirect=(await (await pget('catalog')).json()).venues.find(v=>v.slug==='owner-'+directId);assert.equal(publicDirect.authorizationSource,'admin');assert.equal(publicDirect.calendar,null);assert.equal(publicDirect.pricing,null);assert.equal(publicDirect.cateringPolicy,null);
+assert.equal((await post('drafts',{...directDraft,submit:false,publication:{...adminRights,consent:false}})).status,200);
+assert.equal((await pget('image','?id='+directPhoto)).status,404);
 // A private upload becomes readable publicly only after explicit consent and approval.
 assert.equal((await post('drafts',{...photoDraft,rightsConfirmed:true,submit:true,publication:{consent:true,calendar:null,calendarUpdatedAt:null}})).status,200);
 const photoUpdatedAt=sql.prepare('SELECT updated_at FROM owner_drafts WHERE id=?').get(photoDraftId).updated_at;
