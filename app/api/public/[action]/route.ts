@@ -1,11 +1,12 @@
 import {env} from 'cloudflare:workers';
 import {z} from 'zod';
 import {db} from '@/lib/db';
-import {publicVenues,publicVenue} from '@/lib/public-venues';
+import {publicVenues,publicVenue,type PublicVenue} from '@/lib/public-venues';
 export const dynamic='force-dynamic';
 const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
+function visiblePricing(venue:PublicVenue){if(venue.authorizationSource==='admin')return null;const status=venue.packageAvailability,price=venue.pricing;return {...price,rent:status.rent==='available'?price.rent:null,marriageRent:status.marriageRent==='available'?price.marriageRent:null,morningRent:status.morningRent==='available'?price.morningRent:null,eveningRent:status.eveningRent==='available'?price.eveningRent:null};}
 export async function GET(request:Request,{params}:{params:Promise<{action:string}>}){try{const {action}=await params;const url=new URL(request.url);
- if(action==='catalog'){const venues=await publicVenues();return Response.json({venues:venues.map(venue=>venue.authorizationSource==='admin'?{...venue,pricing:null,cateringPolicy:null}:venue)},{headers});}
+ if(action==='catalog'){const venues=await publicVenues();return Response.json({venues:venues.map(venue=>({...venue,pricing:visiblePricing(venue),packageAvailability:venue.authorizationSource==='admin'?null:venue.packageAvailability,cateringPolicy:venue.authorizationSource==='admin'?null:venue.cateringPolicy}))},{headers});}
  if(action==='calendar'){const venue=await publicVenue(url.searchParams.get('venue')||'');if(!venue)return Response.json({error:'Venue not found'},{status:404,headers});return Response.json({calendar:venue.calendar,updatedAt:venue.calendarUpdatedAt,notice:'Reported dates only. No date is reserved through this website.'},{headers});}
  if(action==='image'){
   const id=url.searchParams.get('id');if(!z.string().uuid().safeParse(id).success)return new Response('Not found',{status:404,headers});

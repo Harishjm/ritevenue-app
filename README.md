@@ -59,6 +59,10 @@ The admin application inbox previews the private photos. Converting an applicati
 
 Drafts and photographs remain private until the administrator explicitly approves publication. Admin-direct listings are labelled as RiteVenue-curated, not owner-approved. Their prices, catering policies and availability are not published until venue-verified; the public calendar shows unconfirmed dates. Approval does not enable payments.
 
+Each draft rental package (24-hour marriage, full day, morning and evening half day) can be Available with a price, Not applicable (not offered), or Not available (currently not offered). Existing drafts default to Available for backward compatibility. An unavailable package is labelled instead of showing its stored placeholder price on public pages and cannot be held in the retained private demo flow. No D1 migration is needed because the choices live in the existing draft JSON.
+
+The admin/owner venue draft editor accepts up to 15 private photos, with at least two required when submitting a listing for review. Its picker supports click-to-choose and drag-and-drop with per-file progress. JPEG, PNG or WebP originals up to 15 MB are optimized in the browser to static WebP at no more than 1600 pixels and 350 KB before upload. The separate public venue application stays optional-photo, with its own six-photo limit; application photos do not automatically grant public-display permission.
+
 ## Catering pilot
 
 - `/catering`: choose a venue, meal-service date and guest count; compare compatible menus and calculate/download an itemized estimate. Three clearly fictional caterers with six menus demonstrate the flow.
