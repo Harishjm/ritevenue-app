@@ -10,6 +10,7 @@ import {dateSchema,selectionSchema,packageIdSchema,extraHoursSchema,makeQuote,HO
 export const dynamic='force-dynamic';
 const json=(data:unknown,status=200)=>Response.json(data,{status,headers:noStore});
 import {draftSchema} from '@/lib/owner-venue';
+import {packagePriceKey} from '@/lib/owner-venue';
 import {intakeDataSchema} from '@/lib/venue-intake';
 import {intakePhotoRows} from '@/lib/intake-photo-server';
 function bucket(){const b=(env as unknown as {BUCKET?:R2Bucket}).BUCKET;if(!b)throw new Error('Storage unavailable');return b;}
@@ -25,7 +26,7 @@ export async function GET(request:Request,{params}:{params:Promise<{action:strin
    const slug=url.searchParams.get('venue');const month=url.searchParams.get('month');const date=url.searchParams.get('date');const selectedPackage=packageIdSchema.safeParse(url.searchParams.get('package')||'marriage-24h');const selectedHours=extraHoursSchema.safeParse(Number(url.searchParams.get('extraHours')||0));if(!selectedPackage.success||!selectedHours.success)return json({error:'Invalid package or extra hours'},400);const packageId=selectedPackage.data,extraHours=selectedHours.data;
    if(date){if(!dateSchema.safeParse(date).success)return json({error:'Choose a date in the next 12 months.'},400);return json({unavailable:await unavailableVenues(date,packageId,extraHours),serverTime:now});}
    if(!slug||!month||!/^\d{4}-\d{2}$/.test(month)||!validDate(month+'-01'))return json({error:'Invalid calendar request'},400);
-   await venuePricing(slug);return json(await calendarSnapshot(slug,month,user.userId,packageId,extraHours));
+   const {venue}=await venuePricing(slug);if(venue.packageAvailability?.[packagePriceKey[packageId]]!=='available'&&venue.packageAvailability)return json({error:'This package is not offered by the venue.'},409);return json(await calendarSnapshot(slug,month,user.userId,packageId,extraHours));
   }
   if(action==='bookings'){const rows=await database.prepare('SELECT id,venue_slug,event_date,quote_json,created_at FROM demo_bookings WHERE user_id=? ORDER BY created_at DESC LIMIT 100').bind(user.userId).all();return json({bookings:rows.results.map(r=>({...r,quote:JSON.parse(String(r.quote_json)),quote_json:undefined}))});}
   if(action==='drafts'||action==='admin'){
@@ -46,7 +47,7 @@ export async function POST(request:Request,{params}:{params:Promise<{action:stri
  try{const user=await apiUser(request);const {action:requestedAction}=await params;if(isPublicDirectory()&&['hold','confirm','release','start-checkout','complete-checkout','cancel-checkout'].includes(requestedAction))return json({error:'Online booking, date holds and payments are not available during the directory launch.'},410);const formFlow=['start-checkout','complete-checkout','cancel-checkout'].includes(requestedAction);const action=({'start-checkout':'hold','complete-checkout':'confirm','cancel-checkout':'release'} as Record<string,string>)[requestedAction]||requestedAction;const database=db();const now=Math.floor(Date.now()/1000);
   const reply=(data:any,status=200)=>{if(!formFlow)return json(data,status);const path=status>=400?'/checkout/problem?code='+(status===409?'not_available':status===400?'invalid_input':'service_unavailable'):action==='hold'?'/checkout/'+data.id:action==='confirm'?'/bookings/'+data.id:'/bookings';return Response.redirect(new URL(path,request.url),303);};
   if(action==='images'){
-   const count=await database.prepare('SELECT count(*) AS n FROM owner_images WHERE owner_id=?').bind(user.userId).first<{n:number}>();if((count?.n||0)>=30)return reply({error:'Demo limit: 30 uploaded images per account.'},400);
+   const count=await database.prepare('SELECT count(*) AS n FROM owner_images WHERE owner_id=?').bind(user.userId).first<{n:number}>();if((count?.n||0)>=300)return reply({error:'Upload limit reached for this account. Contact support before adding more venue photos.'},400);
    const type=request.headers.get('content-type')||'';if(!['image/jpeg','image/png','image/webp'].includes(type))return reply({error:'Choose a JPEG, PNG or WebP image.'},400);
    const reader=request.body?.getReader();if(!reader)return reply({error:'Image is empty'},400);const chunks:Uint8Array[]=[];let size=0;try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>4*1024*1024){await reader.cancel();return reply({error:'Each image must be under 4 MB.'},400);}chunks.push(value);}}finally{reader.releaseLock();}
    const bytes=new Uint8Array(size);let at=0;for(const c of chunks){bytes.set(c,at);at+=c.length;}
@@ -55,7 +56,7 @@ export async function POST(request:Request,{params}:{params:Promise<{action:stri
   }
   let body:unknown;try{body=await readBody(request,formFlow);if(formFlow){const f=body as Record<string,string>;body=action==='hold'?{venueSlug:f.venueSlug,date:f.date,guests:Number(f.guests),packageId:f.packageId,extraHours:Number(f.extraHours||0),addons:f.addons?f.addons.split(','):[]}:action==='confirm'?{holdId:f.holdId,acknowledgeDemo:f.acknowledgeDemo==='yes'}:{holdId:f.holdId};}}catch{return reply({error:'Invalid or oversized JSON request'},400);}
   if(action==='hold'){
-   const parsed=selectionSchema.safeParse(body);if(!parsed.success)return reply({error:parsed.error.issues[0].message},400);const s=parsed.data;const {venue,pricing,approval}=await venuePricing(s.venueSlug);if(s.guests>venue.capacity)return reply({error:'Guest count exceeds venue capacity.'},400);
+   const parsed=selectionSchema.safeParse(body);if(!parsed.success)return reply({error:parsed.error.issues[0].message},400);const s=parsed.data;const {venue,pricing,approval}=await venuePricing(s.venueSlug);if(venue.packageAvailability?.[packagePriceKey[s.packageId]]!=='available'&&venue.packageAvailability)return reply({error:'This package is not offered by the venue.'},409);if(s.guests>venue.capacity)return reply({error:'Guest count exceeds venue capacity.'},400);
    const quote=makeQuote(venue,pricing,s);const id=crypto.randomUUID();const expiresAt=now+HOLD_SECONDS;
    const args=holdBindings(venue.slug,s.date,id,user.userId,expiresAt,quote,now,approval);const result=await database.prepare(approval?ownerHoldSQL:holdSQL).bind(...args).first();if(!result)return reply({error:'This access period overlaps a held or booked event, or the listing changed. Choose another available date or package.'},409);return reply({id,expiresAt,quote,serverTime:now},201);
   }
@@ -83,7 +84,7 @@ export async function POST(request:Request,{params}:{params:Promise<{action:stri
    const parsed=draftSchema.safeParse(body);if(!parsed.success)return reply({error:parsed.error.issues[0].message},400);const d=parsed.data;d.publication.calendarUpdatedAt=d.publication.calendar?new Date().toISOString():null;
    if(d.publication.source==='admin'&&!isAdmin(user))return reply({error:'Only an administrator may prepare an admin-direct listing.'},403);
    for(const id of d.images){const image=await database.prepare('SELECT id FROM owner_images WHERE id=? AND owner_id=?').bind(id,user.userId).first();if(!image)return reply({error:'Choose images uploaded by your account.'},400);}
-   if(d.submit&&!d.images.length)return reply({error:'Add at least one image before submitting for review.'},400);
+   if(d.submit&&d.images.length<2)return reply({error:'Add at least two venue photos before submitting for review.'},400);
    if(d.submit&&d.publication.source==='admin'&&d.publication.consent&&(d.publication.calendar!==null||d.publication.authorizationNote.length<20||!await independentlySuppliedPhotos(database,d.images,user.userId)))return reply({error:'For an admin-direct public listing, leave availability unconfirmed, describe content rights and upload independently licensed photos. Application photos are for private review only.'},400);
    const stamp=new Date().toISOString();const saved=await database.prepare("INSERT INTO owner_drafts (id,owner_id,data_json,status,review_note,created_at,updated_at) VALUES (?,?,?,?,'',?,?) ON CONFLICT(id) DO UPDATE SET data_json=excluded.data_json,status=excluded.status,review_note='',updated_at=excluded.updated_at WHERE owner_drafts.owner_id=excluded.owner_id RETURNING id").bind(d.id,user.userId,JSON.stringify(d),d.submit?'pending_review':'draft',stamp,stamp).first();if(!saved)throw new Error('FORBIDDEN');return reply({id:d.id,status:d.submit?'pending_review':'draft'});
   }
@@ -95,7 +96,7 @@ export async function POST(request:Request,{params}:{params:Promise<{action:stri
     if(!pending)return reply({error:'This draft changed. Refresh before publishing.'},409);
     reviewedPayload=pending.data_json;
     const d=draftSchema.safeParse(JSON.parse(pending.data_json));
-    if(!d.success||!d.data.publication.consent||!d.data.images.length)return reply({error:'Public publication requires a selected authorization route and photos.'},400);
+    if(!d.success||!d.data.publication.consent||d.data.images.length<2)return reply({error:'Public publication requires a selected authorization route and at least two venue photos.'},400);
     if(d.data.publication.source==='admin'){
      const owner=await database.prepare('SELECT owner_id FROM owner_drafts WHERE id=?').bind(parsed.data.id).first<{owner_id:string}>();
      if(owner?.owner_id!==user.userId||d.data.publication.calendar!==null||d.data.publication.authorizationNote.length<20||!await independentlySuppliedPhotos(database,d.data.images,user.userId))return reply({error:'Admin-direct publication requires unconfirmed availability, recorded content rights and independently supplied photos.'},400);
