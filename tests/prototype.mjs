@@ -5,7 +5,7 @@ import {createRequire} from 'node:module';
 import {DatabaseSync} from 'node:sqlite';
 import assert from 'node:assert/strict';
 const root=resolve('.sites-runtime/prototype-tests');mkdirSync(root,{recursive:true});writeFileSync(resolve(root,'package.json'),'{"type":"commonjs"}');
-for(const file of ['lib/venue-photo.ts','lib/intake-photo-server.ts','lib/venue-intake.ts','app/api/venue-applications/route.ts','lib/launch.ts','lib/publication.ts','lib/public-venues.ts','app/api/public/[action]/route.ts','lib/venues.ts','lib/catering.ts','lib/catering-server.ts','app/api/catering/[action]/route.ts','lib/booking.ts','lib/owner-venue.ts','lib/db.ts','lib/demo-server.ts','lib/calendar.ts','app/api/demo/[action]/route.ts']){
+for(const file of ['lib/venue-photo.ts','lib/slugify.ts','lib/venue-image.ts','lib/intake-photo-server.ts','lib/venue-intake.ts','app/api/venue-applications/route.ts','lib/launch.ts','lib/publication.ts','lib/public-venues.ts','app/api/public/[action]/route.ts','lib/venues.ts','lib/catering.ts','lib/catering-server.ts','app/api/catering/[action]/route.ts','lib/booking.ts','lib/owner-venue.ts','lib/db.ts','lib/demo-server.ts','lib/calendar.ts','app/api/demo/[action]/route.ts']){
  let source=readFileSync(file,'utf8').replace("import {env} from 'cloudflare:workers';",'const env=globalThis.__testEnv;');
  if(file==='lib/demo-server.ts')source=source.replace("import {getAuthenticatedUser,isAdminUser,type AuthUser} from './auth';",'type AuthUser=any;async function getAuthenticatedUser(){return globalThis.__testUser;}function isAdminUser(user){return user?.email===globalThis.__testEnv.RITEVENUE_ADMIN_EMAIL;}');
  const dest=resolve(root,file.replace(/\.ts$/,'.js'));mkdirSync(dirname(dest),{recursive:true});
