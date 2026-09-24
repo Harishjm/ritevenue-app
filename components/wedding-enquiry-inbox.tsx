@@ -16,8 +16,9 @@ function EnquiryCard({row,onChanged}:{row:EnquiryRow;onChanged:()=>void}){
  async function loadHistory(){setHistoryBusy(true);setError('');try{setHistory((await api<{events:EnquiryEvent[]}>('?id='+row.id)).events);}catch(e){setError(e instanceof Error?e.message:'Could not load history.');}finally{setHistoryBusy(false);}}
  const data=row.data;
  return <article className="enquiry-card">
-  <span className="tag">{enquiryStatuses[row.status]}</span><h2>{data.name}</h2><p className="muted">Received {dateTime(row.createdAt)} IST · Reference {row.id}</p>
-  <div className="enquiry-contact"><a href={'tel:'+data.phone}>{data.phone}</a>{data.email&&<a href={'mailto:'+data.email}>{data.email}</a>}<strong>Prefers {data.contactMethod==='whatsapp'?'WhatsApp':'a phone call'}</strong></div>
+    <span className="tag">{enquiryStatuses[row.status]}</span><h2>{data.name}</h2><p className="muted">Received {dateTime(row.createdAt)} IST · Reference {row.id}</p>
+    {data.venueName&&<p><strong>Venue enquiry:</strong> {data.venueName} · {data.venueLocality} · {data.venueDate}</p>}
+    <div className="enquiry-contact">{data.phone&&<a href={'tel:'+data.phone}>{data.phone}</a>}{data.email&&<a href={'mailto:'+data.email}>{data.email}</a>}<strong>Contact by {data.phone?'phone':'email'}</strong></div>
   <dl className="enquiry-facts">
    <div><dt>Location</dt><dd>{data.location}</dd></div><div><dt>Wedding date</dt><dd>{data.datePreference==='exact'?data.eventDate:data.datePreference==='month'?data.eventMonth+' (approximate month)':'Flexible / not decided'}</dd></div>
    <div><dt>Guests & food</dt><dd>{data.guests.toLocaleString('en-IN')} guests · {foodOptions[data.food]}</dd></div><div><dt>Assistance</dt><dd>{helpOptions[data.help]} · Planner: {plannerOptions[data.planner]}</dd></div>

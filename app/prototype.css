@@ -8,7 +8,7 @@ html body{--radius:8px;letter-spacing:0}body h1,body h2,body h3,body .eyebrow,bo
 
 body .receipt-navigation{display:flex;flex-wrap:wrap;gap:12px;margin:0 0 24px}body .receipt-actions+.receipt-navigation{margin-top:24px}@media print{body .receipt-navigation{display:none!important}}
 
-body .venue-gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin:0 0 24px}body .venue-gallery img{width:100%;height:180px;object-fit:cover;border-radius:6px}
+body .venue-gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin:0 0 24px}body .venue-gallery img{width:100%;height:180px;object-fit:cover;border-radius:6px;cursor:pointer}body .venue-gallery img.selected{outline:3px solid #155c49;outline-offset:2px}
 
 body .booking-options>select{width:100%;padding:12px;border:1px solid var(--border);border-radius:5px;background:white;font:inherit}body .package-option>span{min-width:0}body .package-option>span:last-child{max-width:40%;text-align:right;font-size:14px}
 body .pricing-fields select{width:100%;min-width:0;border:1px solid var(--border);border-radius:5px;padding:11px;background:white;font:inherit}body .pricing-fields input:disabled{background:#f3f5f2;color:#69756b}

@@ -44,7 +44,7 @@ export const enquiryUpdateSchema=z.object({
  note:z.string().trim().min(5,'Add a short note explaining this update.').max(2000)
 }).strict();
 
-export type WeddingEnquiryData=Omit<z.infer<typeof weddingEnquirySchema>,'requestKey'|'website'>;
+export type WeddingEnquiryData=Omit<z.infer<typeof weddingEnquirySchema>,'requestKey'|'website'> & {venueSlug?:string;venueName?:string;venueLocality?:string;venueDate?:string};
 export type EnquiryStatus=keyof typeof enquiryStatuses;
 export type EnquiryRow={id:string;data:WeddingEnquiryData;status:EnquiryStatus;coordinator:string;followUpOn:string;revision:string;createdAt:string;updatedAt:string;consentVersion:string};
 export type EnquiryEvent={id:string;status:EnquiryStatus;note:string;coordinator:string;follow_up_on:string;created_at:string};

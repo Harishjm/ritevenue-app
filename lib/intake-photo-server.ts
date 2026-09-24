@@ -2,6 +2,7 @@ import {env} from 'cloudflare:workers';
 import {db} from './db';
 import {intakeSchema,intakeHeaders,digest} from './venue-intake';
 import {inspectOptimizedPhoto,MAX_PHOTO_REQUEST_BYTES,MAX_VENUE_PHOTOS} from './venue-photo';
+import {venueImageFilename} from './venue-image';
 
 type Photo={id:string;intake_id:string;position:number;object_key:string;description:string;width:number;height:number;bytes:number;sha256:string};
 type Intake={id:string;payload_hash:string;status:string};
@@ -48,7 +49,7 @@ export async function submitPhotoIntake(request:Request){
     database.prepare('INSERT INTO public_intake_limits (id,attempts,expires_at) VALUES (?,1,?) ON CONFLICT(id) DO UPDATE SET attempts=attempts+1').bind(network,now+86400),
     database.prepare("INSERT INTO public_venue_intakes (id,request_key,payload_hash,data_json,status,created_at) SELECT ?,?,?,?,'uploading',? WHERE (SELECT attempts FROM public_intake_limits WHERE id=?)<=5 ON CONFLICT(request_key) DO NOTHING").bind(id,requestKey,hash,payload,stamp,network)
    ];
-   photos.forEach((photo,position)=>{const photoId=crypto.randomUUID();statements.push(database.prepare('INSERT INTO intake_photos (id,intake_id,position,object_key,description,width,height,bytes,sha256) SELECT ?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM public_venue_intakes WHERE id=?)').bind(photoId,id,position,`intake-images/${id}/${photoId}.webp`,data.photoDescriptions[position],photo.width,photo.height,photo.bytes.length,photo.hash,id));});
+    photos.forEach((photo,position)=>{const photoId=crypto.randomUUID();statements.push(database.prepare('INSERT INTO intake_photos (id,intake_id,position,object_key,description,width,height,bytes,sha256) SELECT ?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM public_venue_intakes WHERE id=?)').bind(photoId,id,position,`intake-images/${id}/${venueImageFilename(data.venueName,data.locality,'Bengaluru',position+1)}`,data.photoDescriptions[position],photo.width,photo.height,photo.bytes.length,photo.hash,id));});
    // Metadata is reserved atomically. Incomplete uploads remain private and retryable.
    await database.batch(statements);
    saved=await database.prepare('SELECT id,payload_hash,status FROM public_venue_intakes WHERE request_key=?').bind(requestKey).first<Intake>();

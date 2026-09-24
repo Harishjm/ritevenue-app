@@ -10,7 +10,7 @@ export async function GET(request:Request,{params}:{params:Promise<{action:strin
  if(action==='calendar'){const venue=await publicVenue(url.searchParams.get('venue')||'');if(!venue)return Response.json({error:'Venue not found'},{status:404,headers});return Response.json({calendar:venue.calendar,updatedAt:venue.calendarUpdatedAt,notice:'Reported dates only. No date is reserved through this website.'},{headers});}
  if(action==='image'){
   const id=url.searchParams.get('id');if(!z.string().uuid().safeParse(id).success)return new Response('Not found',{status:404,headers});
-  const row=await db().prepare("SELECT i.object_key,i.content_type FROM owner_images i WHERE i.id=? AND EXISTS (SELECT 1 FROM owner_drafts d,json_each(d.data_json,'$.images') photo WHERE d.owner_id=i.owner_id AND d.status='approved_public' AND json_extract(d.data_json,'$.publication.consent')=1 AND photo.value=i.id)").bind(id).first<{object_key:string;content_type:string}>();
+    const row=await db().prepare("SELECT i.object_key,i.content_type FROM owner_images i WHERE i.id=? AND EXISTS (SELECT 1 FROM owner_drafts d,json_each(d.data_json,'$.images') photo WHERE d.owner_id=i.owner_id AND d.status='approved_public' AND json_extract(d.data_json,'$.publication.consent')=1 AND photo.value=i.id)").bind(id).first<{object_key:string;content_type:string}>();
   if(!row)return new Response('Not found',{status:404,headers});const bucket=(env as unknown as {BUCKET:R2Bucket}).BUCKET;const image=await bucket.get(row.object_key);if(!image)return new Response('Not found',{status:404,headers});return new Response(image.body,{headers:{...headers,'Content-Type':row.content_type,'Content-Security-Policy':"default-src 'none'"}});
  }
  return Response.json({error:'Not found'},{status:404,headers});
