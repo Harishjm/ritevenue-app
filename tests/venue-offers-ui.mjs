@@ -1,0 +1,36 @@
+import ts from 'typescript';
+import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
+import {resolve,dirname,relative} from 'node:path';
+import {createRequire} from 'node:module';
+import assert from 'node:assert/strict';
+import React from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+const root=resolve('.sites-runtime/offer-ui-tests');mkdirSync(root,{recursive:true});writeFileSync(resolve(root,'package.json'),'{"type":"commonjs"}');
+for(const file of ['lib/venue-offers.ts','lib/venues.ts','components/rental-offer-editor.tsx','components/rental-offer-summary.tsx','components/venue-card-preview.tsx']){
+ const dest=resolve(root,file.replace(/\.tsx?$/,'.js'));mkdirSync(dirname(dest),{recursive:true});
+ const source=readFileSync(file,'utf8').replace(/(['"])@\//g,(_,quote)=>quote+(relative(dirname(dest),root)||'.')+'/');
+ writeFileSync(dest,ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText);
+}
+const require=createRequire(resolve(root,'entry.js')),{newRentalDetails}=require('./lib/venue-offers.js'),Editor=require('./components/rental-offer-editor.js').default,Summary=require('./components/rental-offer-summary.js').default;
+const details=newRentalDetails();details.offers[0]={...details.offers[0],name:'Morning rental',amount:7000000,start:'06:00',end:'15:00',food:'optional'};
+details.facilities=[{name:'AC rooms with attached restroom',quantity:2,status:'included'},{name:'Chairs with cloth',quantity:125,status:'unconfirmed'}];
+details.menus=[{name:'Veg menu',diet:'vegetarian',style:'buffet',perPerson:85000,tax:{status:'extra',rate:18},minimumGuests:null,offerIds:[]}];
+let html=renderToStaticMarkup(React.createElement(Summary,{value:details}));
+assert.match(html,/06:00–15:00/);assert.match(html,/70,000/);assert.match(html,/GST treatment unconfirmed/);assert.match(html,/Chairs with cloth × 125/);assert.match(html,/Unconfirmed/);
+html=renderToStaticMarkup(React.createElement(Summary,{value:details,showPrices:false}));assert.ok(!html.includes('70,000'));assert.match(html,/Venue confirmation required/);
+details.offers[0].amount=null;html=renderToStaticMarkup(React.createElement(Summary,{value:details}));assert.match(html,/Price on request/);assert.ok(!html.includes('₹0'));
+html=renderToStaticMarkup(React.createElement(Editor,{value:details,onChange:()=>{}}));
+for(const label of ['GST treatment','Start time','End time','Add space','Add rental offer','Add charge','Add menu','Minimum billable guests'])assert.ok(html.includes(label),label);
+console.log('Passed flexible offer UI: custom times, quantities vs charges, unknown values, GST labels and hidden admin-direct prices.');
+const previewModule=require('./components/venue-card-preview.js'),Preview=previewModule.default;
+const photos=Array.from({length:15},(_,i)=>'/public-photo-'+i+'.webp');
+html=renderToStaticMarkup(React.createElement(Preview,{href:'/venues/test',name:'Test hall',images:photos,descriptions:['Owner-approved main hall'],type:'Wedding hall'},React.createElement('h3',null,'Test hall')));
+assert.equal((html.match(/<img /g)||[]).length,1,'Only the cover photo is rendered for download before interaction');
+assert.match(html,/href="\/venues\/test"/);assert.match(html,/Owner-approved main hall/);assert.match(html,/1 \/ 15/);assert.match(html,/<h3>Test hall<\/h3>/);
+assert.ok(!html.includes('src="/public-photo-1.webp"'));
+let preview={active:0,seen:[0],wrap:false};preview=previewModule.movePreview(preview,1,15);assert.equal(preview.active,1);assert.deepEqual(preview.seen,[0,1]);assert.equal(preview.wrap,false);
+for(let i=0;i<14;i++)preview=previewModule.movePreview(preview,1,15);assert.equal(preview.active,0);assert.equal(preview.wrap,true);assert.equal(preview.seen.length,15);
+assert.equal(previewModule.movePreview(preview,-1,15).active,14);
+assert.equal(previewModule.movePreview(preview,1,1),preview);assert.ok(previewModule.PREVIEW_INTERVAL_MS>=2000);
+html=renderToStaticMarkup(React.createElement(Preview,{href:'/venues/test',name:'Test hall',images:[photos[0]],descriptions:[],type:'Wedding hall'}));assert.ok(!html.includes('venue-preview-count'));
+console.log('Passed venue-card previews: cover-only initial rendering, photo descriptions, navigation, single-photo fallback, slide order and wraparound.');

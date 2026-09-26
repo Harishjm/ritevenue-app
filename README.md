@@ -161,3 +161,11 @@ Actual payment processing requires approved venue inventory, provider integratio
 ## Public venue onboarding
 
 `/list-your-venue` accepts a private application without sign-in. Public calls to POST `/api/venue-applications` validate input, require same-origin JSON, enforce a durable five-per-network-per-day limit, and deduplicate retries. The admin-only inbox displays up to 100 recent applications, supports documented rejection/reopening, and can create one private working draft from each application. Conversion does not confirm owner rights, upload photos or publish the venue. Independent owner authentication is still required before venue representatives can manage their own drafts.
+
+## Flexible rental offers
+
+In the draft editor, enable **Use flexible offers** for venue-specific time windows, tax-inclusive/exclusive amounts, event spaces and combinations, facilities with quantities, separate charges, and per-person food menus. Blank prices/times/quantities mean unconfirmed; menu and cleaning charges are not silently added to ground rent. A charge or menu can apply to selected offers or all offers. All amounts use integer paise internally.
+
+This versioned `rentalDetails` model lives in the existing draft JSON, so no database migration is required. Existing standard-package listings remain supported and default to Bengaluru when their city is absent. New city fields flow through intake, draft editing, public search and venue details. Flexible offers do not require a full-day price or infer half-day rates. Changing a listing still withdraws it pending review. Admin-direct financial details remain hidden publicly until venue confirmation.
+
+Flexible offers are discovery/enquiry-only and excluded from the legacy demo booking calculator. Real reservations for combinations must later atomically lock every included space (for example Lawn + Hall must conflict with Hall alone), using actual offer windows and immutable agreed-price snapshots. This implementation does not enable reservations, online booking, payments, owner authentication or automatic publication. It does not seed the supplied venue examples as approved listings.

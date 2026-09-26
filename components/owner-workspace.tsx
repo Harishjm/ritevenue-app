@@ -27,7 +27,13 @@ import VenuePhotoPicker, {
 } from "@/components/venue-photo-picker";
 import { optimizeVenuePhoto } from "@/lib/optimize-venue-photo";
 import { demoApi } from "@/lib/demo-client";
+import RentalOfferEditor from '@/components/rental-offer-editor';
+import RentalOfferSummary from '@/components/rental-offer-summary';
+import {newRentalDetails,type RentalDetails} from '@/lib/venue-offers';
+import {draftSchema} from '@/lib/owner-venue';
 type Draft = {
+  city: string;
+  rentalDetails: RentalDetails | null;
   publication: Publication;
   cateringPolicy: CateringPolicy;
   packageAvailability: PackageAvailability;
@@ -44,6 +50,8 @@ type Draft = {
   submit: boolean;
 };
 const blank = (): Draft => ({
+  city: 'Bengaluru',
+  rentalDetails: null,
   publication: publicationSchema.parse({}),
   cateringPolicy: policySchema.parse({}),
   packageAvailability: packageAvailabilitySchema.parse({}),
@@ -51,7 +59,7 @@ const blank = (): Draft => ({
   name: "",
   locality: "",
   address: "",
-  type: "Wedding hall",
+  type: "",
   capacity: 200,
   description: "",
   pricing: pricingSchema.parse({
@@ -196,10 +204,10 @@ export default function OwnerWorkspace({
         data.drafts.map((r: any) => ({
           ...r,
           data: {
-            ...r.data,
+            ...draftSchema.parse(r.data),
             publication: publicationSchema.parse(r.data.publication || {}),
             cateringPolicy: policySchema.parse(r.data.cateringPolicy || {}),
-            pricing: pricingSchema.parse(r.data.pricing),
+            pricing: draftSchema.parse(r.data).pricing,
             packageAvailability: packageAvailabilitySchema.parse(
               r.data.packageAvailability || {},
             ),
@@ -279,7 +287,7 @@ export default function OwnerWorkspace({
             "X-Venue-Id": draft.id,
             "X-Venue-Name": draft.name,
             "X-Venue-Locality": draft.locality,
-            "X-Venue-City": "Bengaluru",
+            "X-Venue-City": draft.city,
             "X-Photo-Position": String(position),
           },
           body: optimized.blob,
@@ -431,7 +439,7 @@ export default function OwnerWorkspace({
                   />
                 </label>
                 <label>
-                  Bengaluru locality
+                  Locality
                   <input
                     required
                     maxLength={100}
@@ -441,14 +449,17 @@ export default function OwnerWorkspace({
                     }
                   />
                 </label>
+                <label>City<input required maxLength={100} value={draft.city} onChange={e=>setDraft({...draft,city:e.target.value})}/></label>
                 <label>
                   Venue type
                   <select
+                    required
                     value={draft.type}
                     onChange={(e) =>
                       setDraft({ ...draft, type: e.target.value })
                     }
                   >
+                    <option value="" disabled>Choose a venue type</option>
                     {venueTypes.slice(1).map((t) => (
                       <option key={t}>{t}</option>
                     ))}
@@ -492,6 +503,8 @@ export default function OwnerWorkspace({
                   }
                 />
               </label>
+              <label className="addon-option"><input type="checkbox" checked={!!draft.rentalDetails} onChange={e=>setDraft({...draft,rentalDetails:e.target.checked?newRentalDetails():null,pricing:e.target.checked?draft.pricing:blank().pricing,packageAvailability:e.target.checked?draft.packageAvailability:packageAvailabilitySchema.parse({})})}/>Use flexible offers: custom times, GST, spaces, menus and inclusions</label>
+              {draft.rentalDetails?<RentalOfferEditor value={draft.rentalDetails} onChange={rentalDetails=>setDraft({...draft,rentalDetails})}/>:<>
               <h3>Package rentals & mandatory charges</h3>
               <PricingFields
                 value={draft.pricing}
@@ -515,6 +528,7 @@ export default function OwnerWorkspace({
                 Starter half-day rentals are half the full-day rental; review
                 these demo prices before submitting.
               </p>
+              </>}
               <PublicationFields
                 key={draft.id}
                 value={draft.publication}
@@ -624,7 +638,7 @@ export default function OwnerWorkspace({
                       </span>
                       <h2>{row.data.name}</h2>
                       <p>
-                        {row.data.locality} · {row.data.type} ·{" "}
+                        {row.data.locality}, {row.data.city} · {row.data.type} ·{" "}
                         {row.data.capacity} guests
                       </p>
                     </div>
@@ -718,7 +732,7 @@ export default function OwnerWorkspace({
                     )}
                   <p>{row.data.address}</p>
                   <p>{row.data.description}</p>
-                  <p>
+                  {row.data.rentalDetails?<RentalOfferSummary value={row.data.rentalDetails}/>:<p>
                     24-hour Marriage:{" "}
                     {rentalSummary(
                       row.data.packageAvailability.marriageRent,
@@ -744,7 +758,7 @@ export default function OwnerWorkspace({
                     {money(row.data.pricing.generator / 100)} · Parking:{" "}
                     {money(row.data.pricing.parking / 100)} · Cleaning:{" "}
                     {money(row.data.pricing.cleaning / 100)}
-                  </p>
+                  </p>}
                   <div className="draft-photos">
                     {row.data.images.map((id: string) => (
                       <a

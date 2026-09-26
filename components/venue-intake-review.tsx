@@ -1,7 +1,7 @@
 'use client';
 /* eslint-disable @next/next/no-img-element -- Private, pre-optimized photos must retain authenticated no-store requests. */
 import {useEffect,useState} from 'react';
-type Intake={id:string;createdAt:string;status:string;convertedDraftId:string|null;reviewNote:string;reviewedAt:string|null;photos?:{id:string;url:string;description:string;width:number;height:number;bytes:number}[];data:{venueName:string;locality:string;contactName:string;email:string;phone:string;capacity:number;notes:string}};
+type Intake={id:string;createdAt:string;status:string;convertedDraftId:string|null;reviewNote:string;reviewedAt:string|null;photos?:{id:string;url:string;description:string;width:number;height:number;bytes:number}[];data:{venueName:string;city?:string;locality:string;venueType?:string;contactName:string;email:string;phone:string;capacity:number;notes:string}};
 
 export default function VenueIntakeReview(){
 	const [rows,setRows]=useState<Intake[]>([]),[state,setState]=useState('Loading applications…');
@@ -46,7 +46,7 @@ export default function VenueIntakeReview(){
 				<article className="intake-review-card" key={r.id}>
 					<span className="tag">{r.status.replaceAll('_',' ')}</span>
 					<h3>{r.data.venueName}</h3>
-					<p>{r.data.locality} · {r.data.capacity} guests</p>
+					<p>{r.data.locality}, {r.data.city||'Bengaluru'} · {r.data.venueType||'Wedding hall'} · {r.data.capacity} guests</p>
 					<p>{r.data.contactName} · {r.data.email} · {r.data.phone}</p>
 					<p className="intake-notes">{r.data.notes}</p>
 					<div className="intake-photo-grid">{r.photos?.map(photo=><figure className="intake-photo-card" key={photo.id}><a href={photo.url} target="_blank" rel="noopener noreferrer"><img src={photo.url} alt={photo.description} width={photo.width} height={photo.height} loading="lazy"/></a><figcaption>{photo.description} · {Math.ceil(photo.bytes/1024)} KB</figcaption></figure>)}</div>

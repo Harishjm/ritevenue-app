@@ -4,6 +4,7 @@ import Link from 'next/link';
 import {useEffect,useRef,useState,type FormEvent} from 'react';
 import {optimizeVenuePhoto} from '@/lib/optimize-venue-photo';
 import {MAX_VENUE_PHOTOS} from '@/lib/venue-photo';
+import {venueTypes} from '@/lib/venues';
 type Photo={id:string;blob:Blob;url:string;description:string;originalBytes:number;width:number;height:number};
 const size=(bytes:number)=>bytes>=1024*1024?(bytes/(1024*1024)).toFixed(1)+' MB':Math.ceil(bytes/1024)+' KB';
 export default function VenueIntakeForm(){
@@ -24,7 +25,7 @@ export default function VenueIntakeForm(){
  async function submit(event:FormEvent<HTMLFormElement>){
   event.preventDefault();if(sending.current||processing.current)return;sending.current=true;setBusy(true);setError('');
   const form=new FormData(event.currentTarget);if(!key.current)key.current=crypto.randomUUID();
-  const application={requestKey:key.current,venueName:form.get('venueName'),locality:form.get('locality'),contactName:form.get('contactName'),email:form.get('email'),phone:form.get('phone'),capacity:Number(form.get('capacity')),notes:form.get('notes'),consent:form.get('consent')==='on',website:form.get('website'),photoDescriptions:photos.map(photo=>photo.description),photoConsent:photos.length>0&&form.get('photoConsent')==='on'};
+    const application={requestKey:key.current,venueName:form.get('venueName'),city:form.get('city'),locality:form.get('locality'),venueType:form.get('venueType'),contactName:form.get('contactName'),email:form.get('email'),phone:form.get('phone'),capacity:Number(form.get('capacity')),notes:form.get('notes'),consent:form.get('consent')==='on',website:form.get('website'),photoDescriptions:photos.map(photo=>photo.description),photoConsent:photos.length>0&&form.get('photoConsent')==='on'};
   const multipart=new FormData();multipart.append('application',JSON.stringify(application));
   photos.forEach((photo,index)=>multipart.append('photos',photo.blob,'venue-photo-'+(index+1)+'.webp'));
   try{
@@ -39,7 +40,9 @@ export default function VenueIntakeForm(){
  return <form className="intake-form" onSubmit={submit}>
   <fieldset disabled={busy||optimizing}><legend>Tell us about your venue</legend><div className="intake-fields">
    <label>Venue name<input name="venueName" required minLength={3} maxLength={120} autoComplete="organization"/></label>
-   <label>Bengaluru locality<input name="locality" required minLength={2} maxLength={120} placeholder="e.g. Rajajinagar"/></label>
+    <label>City<input name="city" required minLength={2} maxLength={100} defaultValue="Bengaluru" autoComplete="address-level2"/></label>
+    <label>Locality<input name="locality" required minLength={2} maxLength={120} placeholder="e.g. Rajajinagar or Mysore"/></label>
+    <label>Venue type<select name="venueType" required defaultValue=""><option value="" disabled>Choose a venue type</option>{venueTypes.slice(1).map(type=><option key={type} value={type}>{type}</option>)}</select></label>
    <label>Your name<input name="contactName" required minLength={2} maxLength={100} autoComplete="name"/></label>
    <label>Email address<input name="email" type="email" required maxLength={254} autoComplete="email"/></label>
    <label>Contact number<input name="phone" type="tel" required minLength={8} maxLength={24} autoComplete="tel"/></label>

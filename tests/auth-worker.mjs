@@ -54,6 +54,13 @@ try{
  assert.ok(sessionCookie);
  const session=await worker.dispatchFetch(origin+'/api/auth/session',{headers:{cookie:sessionCookie.split(';')[0]}});
  assert.deepEqual(await session.json(),{authenticated:true,user:{email:'admin@example.test',role:'admin'}});
+ const draftId=crypto.randomUUID(),offerId=crypto.randomUUID();
+ const draftResponse=await worker.dispatchFetch(origin+'/api/demo/drafts',{method:'POST',headers:{origin,'content-type':'application/json',cookie:sessionCookie.split(';')[0]},body:JSON.stringify({id:draftId,name:'Flexible fixture venue',city:'Mysore',locality:'Test locality',address:'Private fixture address in Mysore',type:'Resort',capacity:2500,description:'Synthetic venue details for testing the flexible offer workflow locally.',images:[],rightsConfirmed:false,submit:false,rentalDetails:{version:1,spaces:[],offers:[{id:offerId,name:'24-hour rental',spaceIds:[],status:'available',amount:50000000,tax:{status:'included',rate:null},start:'15:00',end:'15:00',endDay:1,food:'unconfirmed',notes:''}],facilities:[],charges:[],menus:[]}})});
+ assert.equal(draftResponse.status,200,'Built Worker can save flexible drafts without legacy full-day pricing');
+ const savedDraft=JSON.parse((await db.prepare('SELECT data_json FROM owner_drafts WHERE id=?').bind(draftId).first()).data_json);
+ assert.equal(savedDraft.city,'Mysore');assert.equal(savedDraft.pricing.rent,0);assert.equal(savedDraft.rentalDetails.offers[0].start,'15:00');
+ const draftsResponse=await worker.dispatchFetch(origin+'/api/demo/drafts',{headers:{cookie:sessionCookie.split(';')[0]}});
+ assert.equal((await draftsResponse.json()).drafts[0].data.rentalDetails.offers[0].tax.status,'included');
  const replay=await worker.dispatchFetch(callbackUrl,{headers:{cookie:flowCookie},redirect:'manual'});
  assert.equal(replay.headers.get('location'),'/admin/sign-in?error=google');
  assert.equal(exchangeCalls,1);
@@ -64,5 +71,5 @@ try{
  assert.equal(redirectCallback.headers.get('location'),'/admin/sign-in?error=google');
  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM auth_sessions').first()).n,1);
  assert.equal(exchangeCalls,2);
- console.log('Passed built Worker Google sign-in, D1 flow consumption, token exchange, remote JWKS verification, session creation and replay rejection.');
+ console.log('Passed built Worker Google sign-in, D1 flow consumption, token exchange, remote JWKS verification, session creation, replay rejection and flexible venue draft persistence.');
 }finally{await worker.dispose();}

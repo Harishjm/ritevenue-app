@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import {Dialog,DialogContent,DialogTitle,DialogDescription} from '@/components/ui/dialog';
 import { indiaToday } from "@/lib/venues";
 import { shiftDate, validDate } from "@/lib/booking";
 import { publicDateStatus, type Publication } from "@/lib/publication";
@@ -14,6 +15,7 @@ export default function PublicCalendar({
   initialUpdatedAt: string;
   source?: Publication["source"];
 }) {
+  const enquiryTrigger=useRef<HTMLButtonElement|null>(null);
   const [month, setMonth] = useState(indiaToday().slice(0, 7)),
     [calendar, setCalendar] = useState(initialCalendar),
     [updated, setUpdated] = useState(initialUpdatedAt),
@@ -104,7 +106,7 @@ export default function PublicCalendar({
         Confirm the exact time and availability directly with the venue before
         making arrangements.
       </p>
-      <div className="workspace-actions">
+      <div className="public-calendar-controls">
         <label>
           Month{" "}
           <input
@@ -138,10 +140,30 @@ export default function PublicCalendar({
         {Array.from({ length: days }, (_, i) => {
           const date = month + "-" + String(i + 1).padStart(2, "0"),
             status = publicDateStatus(calendar, date, updated);
-          return <div role="listitem" key={date} className={status} aria-label={date + ": " + labels[status]}>{status === "available" ? <button type="button" className="calendar-enquiry" onClick={() => { setEnquiryDate(date); setEnquiryState("idle"); setEnquiryError(""); }}><strong>{i + 1}</strong><small>Enquiry</small></button> : <><strong>{i + 1}</strong><small>{status === "unavailable" ? "Unavailable" : status === "past" ? "Past" : "Unknown"}</small></>}</div>;
+          return <div role="listitem" key={date} className={status} aria-label={date + ": " + labels[status]}>{status === "available" ? <button type="button" className="calendar-enquiry" onClick={(event) => { enquiryTrigger.current=event.currentTarget; setEnquiryDate(date); setEnquiryState("idle"); setEnquiryError(""); }}><strong>{i + 1}</strong><small>Enquiry</small></button> : <><strong>{i + 1}</strong><small>{status === "unavailable" ? "Unavailable" : status === "past" ? "Past" : "Unknown"}</small></>}</div>;
         })}
       </div>
-      {enquiryDate && enquiryState === "sent" ? <div className="venue-enquiry-success" role="status"><strong>Enquiry sent.</strong><p>We received your enquiry for {enquiryDate}. We’ll get back to you within 1–2 hours.</p><button type="button" className="filter-button" onClick={() => { setEnquiryDate(""); setEnquiryState("idle"); }}>Choose another date</button></div> : enquiryDate && <form className="venue-enquiry-form" onSubmit={submitEnquiry}><h3>Enquire about {enquiryDate}</h3><p>Share your contact details and we’ll confirm availability with you.</p><label>Name<input name="name" required minLength={2} maxLength={100} autoComplete="name" /></label><label>Phone number <span className="muted">or email below</span><input name="phone" type="tel" minLength={8} maxLength={24} autoComplete="tel" /></label><label>Email address <span className="muted">or phone above</span><input name="email" type="email" maxLength={254} autoComplete="email" /></label><label className="venue-enquiry-consent"><input name="consent" type="checkbox" required /><span>I agree that RiteVenue may contact me about this venue enquiry.</span></label>{enquiryError&&<p className="error" role="alert">{enquiryError}</p>}<button className="primary" disabled={enquiryState === "sending"}>{enquiryState === "sending" ? "Sending…" : "Send enquiry"}</button></form>}
+      <Dialog open={!!enquiryDate} onOpenChange={open=>{if(!open&&enquiryState!=='sending')setEnquiryDate('');}}>
+        <DialogContent className="venue-enquiry-dialog" showCloseButton={enquiryState!=='sending'}
+          onCloseAutoFocus={event=>{event.preventDefault();enquiryTrigger.current?.focus();}}
+          onEscapeKeyDown={event=>{if(enquiryState==='sending')event.preventDefault();}}
+          onInteractOutside={event=>{if(enquiryState==='sending')event.preventDefault();}}>
+          <DialogTitle>{enquiryState==='sent'?'Enquiry sent':`Enquire about ${enquiryDate}`}</DialogTitle>
+          <DialogDescription>{enquiryState==='sent'?'Your enquiry has been received. This does not reserve the venue or date.':'Share your contact details and we’ll confirm availability with you. This is an enquiry, not a booking.'}</DialogDescription>
+          {enquiryState==='sent'?<div className="venue-enquiry-success" role="status"><p>We received your enquiry for {enquiryDate}. We’ll get back to you within 1–2 hours.</p><button type="button" className="filter-button" onClick={()=>setEnquiryDate('')}>Back to calendar</button></div>
+          :<form className="venue-enquiry-form" onSubmit={submitEnquiry}>
+            <fieldset disabled={enquiryState==='sending'}>
+              <label>Name<input name="name" required minLength={2} maxLength={100} autoComplete="name"/></label>
+              <label>Phone number <span className="muted">or email below</span><input name="phone" type="tel" minLength={8} maxLength={24} autoComplete="tel"/></label>
+              <label>Email address <span className="muted">or phone above</span><input name="email" type="email" maxLength={254} autoComplete="email"/></label>
+              <label className="venue-enquiry-consent"><input name="consent" type="checkbox" required/><span>I agree that RiteVenue may contact me about this venue enquiry.</span></label>
+              {enquiryError&&<p className="error" role="alert">{enquiryError}</p>}
+              <button className="primary" disabled={enquiryState==='sending'}>{enquiryState==='sending'?'Sending…':'Send enquiry'}</button>
+              <button type="button" className="filter-button" onClick={()=>setEnquiryDate('')}>Cancel</button>
+            </fieldset>
+          </form>}
+        </DialogContent>
+      </Dialog>
       {error && (
         <p className="error" role="alert">
           {error}

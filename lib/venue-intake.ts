@@ -1,7 +1,9 @@
 import {z} from 'zod';
+import {venueTypes} from './venues';
 export const intakeSchema=z.object({
  requestKey:z.string().uuid(),venueName:z.string().trim().min(3).max(120),
- locality:z.string().trim().min(2).max(120),contactName:z.string().trim().min(2).max(100),
+ city:z.string().trim().min(2).max(100).optional(),
+ locality:z.string().trim().min(2).max(120),venueType:z.string().refine(value=>venueTypes.slice(1).includes(value),'Choose a venue type.').default('Wedding hall'),contactName:z.string().trim().min(2).max(100),
  email:z.string().trim().email().max(254).transform(s=>s.toLowerCase()),
  phone:z.string().trim().regex(/^\+?[0-9 ()-]{8,24}$/,'Enter a valid contact number'),
  capacity:z.number().int().min(1).max(50000),
