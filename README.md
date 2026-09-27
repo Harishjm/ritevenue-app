@@ -158,6 +158,14 @@ Legacy Google/enquiry files remain for reference; their active API endpoints are
 
 Actual payment processing requires approved venue inventory, provider integration with verified webhooks, booking agreements, cancellation/refund handling, production customer/owner authentication and operational testing. The current Site is a non-transactional public directory. Do not publish fictional inventory as real listings or reuse demo tax/price assumptions as a live quote policy.
 
+## Public venue URLs
+
+Published venue pages use `/venues/<name>-<locality>-<city>-<stable-key>` in lowercase with hyphen-separated words. The key is the complete existing UUID encoded in base 36 (25 characters), not a shortened hash, so same-name venues remain distinct without adding a database migration. `/venues/` covers all supported venue types, not only wedding venues.
+
+Directory cards, admin public-preview links, canonical metadata and the production sitemap use the same URL helper. Legacy `/venues/owner-<uuid>` links and descriptive links from before a rename return HTTP 308 redirects to the current URL, preserving query parameters. Canonical metadata excludes tracking parameters. Internal API/calendar/enquiry identifiers remain unchanged. Drafts, withdrawn listings and unknown identifiers return 404 through either URL format; this does not bypass publication approval. Existing non-venue public pages already have descriptive paths and are unchanged.
+
+Run `pnpm test` and `pnpm build`, then `node tests/auth-worker.mjs` for the built-Worker HTTP redirect and canonical checks (isolated local D1/R2 and synthetic authentication). These changes need the normal authorized deployment before public links change; no production migration or DNS change is required.
+
 ## Public venue onboarding
 
 `/list-your-venue` accepts a private application without sign-in. Public calls to POST `/api/venue-applications` validate input, require same-origin JSON, enforce a durable five-per-network-per-day limit, and deduplicate retries. The admin-only inbox displays up to 100 recent applications, supports documented rejection/reopening, and can create one private working draft from each application. Conversion does not confirm owner rights, upload photos or publish the venue. Independent owner authentication is still required before venue representatives can manage their own drafts.

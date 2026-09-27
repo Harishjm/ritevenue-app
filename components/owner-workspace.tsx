@@ -37,6 +37,7 @@ import VenueCapacitySummary from '@/components/venue-capacity-summary';
 import {capacityLabel,type CapacityDetails} from '@/lib/venue-capacity';
 import {newCustomRentalDetails,type RentalDetails} from '@/lib/venue-offers';
 import {draftSchema} from '@/lib/owner-venue';
+import {venuePublicPath} from '@/lib/venue-url';
 type Draft = {
   city: string;
   rentalDetails: RentalDetails | null;
@@ -672,7 +673,7 @@ export default function OwnerWorkspace({
                     </button>
                   </div>
                   {row.status === "approved_public" && (
-                    <a href={"/venues/owner-" + row.id} className="primary">
+                    <a href={venuePublicPath({...row.data,id:row.id})} className="primary">
                       View public venue & calendar
                     </a>
                   )}

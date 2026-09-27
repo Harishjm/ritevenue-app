@@ -5,7 +5,7 @@ import {createRequire} from 'node:module';
 import {DatabaseSync} from 'node:sqlite';
 import assert from 'node:assert/strict';
 const root=resolve('.sites-runtime/prototype-tests');mkdirSync(root,{recursive:true});writeFileSync(resolve(root,'package.json'),'{"type":"commonjs"}');
-for(const file of ['lib/venue-capacity.ts','lib/venue-offers.ts','lib/venue-photo.ts','lib/slugify.ts','lib/venue-image.ts','lib/intake-photo-server.ts','lib/venue-intake.ts','app/api/venue-applications/route.ts','lib/launch.ts','lib/publication.ts','lib/public-venues.ts','app/api/public/[action]/route.ts','lib/venues.ts','lib/catering.ts','lib/catering-server.ts','app/api/catering/[action]/route.ts','lib/booking.ts','lib/owner-venue.ts','lib/db.ts','lib/demo-server.ts','lib/calendar.ts','app/api/demo/[action]/route.ts']){
+for(const file of ['lib/venue-capacity.ts','lib/venue-offers.ts','lib/venue-photo.ts','lib/slugify.ts','lib/venue-url.ts','lib/guides.ts','app/sitemap.ts','lib/venue-image.ts','lib/intake-photo-server.ts','lib/venue-intake.ts','app/api/venue-applications/route.ts','lib/launch.ts','lib/publication.ts','lib/public-venues.ts','app/api/public/[action]/route.ts','lib/venues.ts','lib/catering.ts','lib/catering-server.ts','app/api/catering/[action]/route.ts','lib/booking.ts','lib/owner-venue.ts','lib/db.ts','lib/demo-server.ts','lib/calendar.ts','app/api/demo/[action]/route.ts']){
  let source=readFileSync(file,'utf8').replace("import {env} from 'cloudflare:workers';",'const env=globalThis.__testEnv;');
  if(file==='lib/demo-server.ts')source=source.replace("import {getAuthenticatedUser,isAdminUser,type AuthUser} from './auth';",'type AuthUser=any;async function getAuthenticatedUser(){return globalThis.__testUser;}function isAdminUser(user){return user?.email===globalThis.__testEnv.RITEVENUE_ADMIN_EMAIL;}');
  const dest=resolve(root,file.replace(/\.ts$/,'.js'));mkdirSync(dirname(dest),{recursive:true});
@@ -556,3 +556,44 @@ const publicCapacity=(await (await pget('catalog')).json()).venues.find(v=>v.slu
 assert.deepEqual(publicCapacity.capacityDetails,counts);assert.equal(publicCapacity.capacity,1500,'Seated and floating values must not be added together');
 assert.equal(ownerDomain.ownerListing(capacityId,sql.prepare('SELECT data_json FROM owner_drafts WHERE id=?').get(capacityId).data_json).venue.capacity,1500);
 console.log('Passed guest capacity: optional ranges, seated/floating bounds, blank/zero/decimal rejection, legacy records, intake conversion, publication and unchanged authoritative maximum.');
+
+const {venuePublicSlug,venuePublicPath,matchesVenueUrl}=require('./lib/venue-url.js');
+const {publicVenue:resolvePublicVenue}=require('./lib/public-venues.js');
+const urlFixture={id:'83448ab7-ab0f-4848-8517-d3d5aae6ae8f',name:'The Windflower Resorts & Spa',locality:'Nazarbad',city:'Mysore'};
+const readableSlug=venuePublicSlug(urlFixture);
+assert.match(readableSlug,/^the-windflower-resorts-spa-nazarbad-mysore-[a-z0-9]{25}$/);
+assert.equal(venuePublicPath(urlFixture),'/venues/'+readableSlug);
+assert.equal(venuePublicSlug({...urlFixture,name:'Café / Wedding & Hall?'}).startsWith('cafe-wedding-hall-'),true);
+assert.ok(venuePublicSlug({...urlFixture,name:'é'.repeat(100),locality:'l'.repeat(100),city:'c'.repeat(100)}).length<=146);
+assert.match(venuePublicSlug({...urlFixture,name:'ಅ',locality:'ಕ',city:'ಗ'}),/^venue-/,'Non-Latin-only labels need a safe fallback');
+assert.notEqual(readableSlug,venuePublicSlug({...urlFixture,id:'83448ab7-ab0f-4848-8517-d3d5aae6ae80'}),'Same-name venues and UUIDs with the same prefix must remain distinct');
+assert.equal(matchesVenueUrl(readableSlug,urlFixture.id),true);
+assert.equal(matchesVenueUrl(readableSlug.toUpperCase(),urlFixture.id),true);
+assert.equal(matchesVenueUrl('owner-'+urlFixture.id,urlFixture.id),true);
+assert.equal(matchesVenueUrl('old-name-'+readableSlug.split('-').at(-1),urlFixture.id),true);
+assert.equal(matchesVenueUrl(readableSlug+'-junk',urlFixture.id),false);
+assert.equal(matchesVenueUrl('https://evil.test/'+readableSlug,urlFixture.id),false);
+assert.equal((await resolvePublicVenue(publicCapacity.publicSlug)).slug,publicCapacity.slug);
+assert.equal((await resolvePublicVenue(publicCapacity.slug)).publicPath,publicCapacity.publicPath);
+assert.equal((await pget('calendar','?venue='+publicCapacity.publicSlug)).status,200,'Readable and legacy keys both work for calendar lookups');
+const previousPublicSlug=publicCapacity.publicSlug;
+const renamedCapacity={...JSON.parse(sql.prepare('SELECT data_json FROM owner_drafts WHERE id=?').get(capacityId).data_json),name:'Renamed capacity fixture'};
+sql.prepare('UPDATE owner_drafts SET data_json=? WHERE id=?').run(JSON.stringify(renamedCapacity),capacityId);
+assert.equal((await resolvePublicVenue(previousPublicSlug)).publicSlug,venuePublicSlug(renamedCapacity),'Old descriptive URLs resolve the current canonical after a rename');
+sql.prepare("UPDATE owner_drafts SET status='draft' WHERE id=?").run(capacityId);
+assert.equal(await resolvePublicVenue(previousPublicSlug),null,'A descriptive URL must never expose a withdrawn draft');
+assert.equal(await resolvePublicVenue(publicCapacity.slug),null,'Legacy URLs have the same publication gate');
+assert.equal(await resolvePublicVenue(venuePublicSlug(renamedCapacity)),null);
+console.log('Passed readable venue URLs: normalization, collision-free identity, legacy/calendar compatibility, rename resolution and unpublished listing protection.');
+
+const sitemap=require('./app/sitemap.js').default;
+globalThis.__testEnv.RITEVENUE_DEPLOYMENT='standalone_cloudflare_production';
+const sitemapEntries=await sitemap();
+const liveCatalog=(await (await pget('catalog')).json()).venues;
+assert.ok(liveCatalog.length>0);
+for(const venue of liveCatalog)assert.ok(sitemapEntries.some(entry=>entry.url==='https://ritevenue.in'+venue.publicPath));
+assert.equal(sitemapEntries.some(entry=>/\/venues\/owner-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(entry.url)),false);
+assert.equal(sitemapEntries.some(entry=>entry.url.endsWith(venuePublicSlug(renamedCapacity))),false,'Withdrawn listings must not appear in the sitemap');
+globalThis.__testEnv.RITEVENUE_DEPLOYMENT='standalone_cloudflare_staging';
+assert.deepEqual(await sitemap(),[],'Staging must not advertise indexable venue URLs');
+console.log('Passed canonical-only production sitemap and staging indexing protection.');
