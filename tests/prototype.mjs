@@ -514,7 +514,7 @@ const convertedText=offersDomain.rentalDetailsText(resort);
 for(const value of ['Lawn + Hall','Grove + Hall','INR 4,50,000','+ 18% GST','Cleaning','INR 25,000','Applies to: Lawn + Hall','INR 850','All offers'])assert.ok(convertedText.includes(value),value);
 assert.deepEqual(offersDomain.rentalDetailsSchema.parse(resort),resort,'Reading existing structured details does not change them');
 for(const source of ['owner','admin']){
- const customId=crypto.randomUUID(),customDraft={...flexDraft,id:customId,rentalDetails:customDetails,publication:source==='admin'?adminRights:flexDraft.publication,submit:false};
+ const customId=crypto.randomUUID(),customDraft={...flexDraft,id:customId,rentalDetails:customDetails,cateringPolicy:{mode:'in_house',notes:'Veg menu: INR 850 + 18% GST per plate\nNon-veg menu: INR 1400 + 18% GST per plate'},publication:source==='admin'?adminRights:flexDraft.publication,submit:false};
  assert.equal((await post('drafts',customDraft)).status,200);
  assert.ok(!(await (await pget('catalog')).json()).venues.some(v=>v.slug==='owner-'+customId),'Draft custom text stays private');
  const saved=JSON.parse(sql.prepare('SELECT data_json FROM owner_drafts WHERE id=?').get(customId).data_json);
@@ -523,6 +523,7 @@ for(const source of ['owner','admin']){
  assert.equal((await post('review',{id:customId,status:'approved_public',note:'Reviewed custom listing text.',expectedUpdatedAt:sql.prepare('SELECT updated_at FROM owner_drafts WHERE id=?').get(customId).updated_at})).status,200);
  const publishedCustom=(await (await pget('catalog')).json()).venues.find(v=>v.slug==='owner-'+customId);
  assert.deepEqual(publishedCustom.rentalDetails,customDetails);assert.equal(publishedCustom.pricing,null);assert.equal(publishedCustom.capacity,2500);
+ assert.deepEqual(publishedCustom.cateringPolicy,{mode:'in_house',notes:customDraft.cateringPolicy.notes},'Publish custom catering notes without legacy default fees or supplier IDs');
  assert.equal((await post('drafts',{...customDraft,rentalDetails:{version:2,text:customText+'\nRevised'}})).status,200);
  assert.ok(!(await (await pget('catalog')).json()).venues.some(v=>v.slug==='owner-'+customId),'Editing custom details withdraws the listing until reviewed again');
 }

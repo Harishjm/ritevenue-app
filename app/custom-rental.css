@@ -20,6 +20,8 @@ body .custom-rental-editor p{margin:0;line-height:1.65}
 body .custom-rental-editor .eyebrow{margin-bottom:8px}
 body .custom-rental-editor>label{font-weight:600}
 body .custom-rental-editor>textarea{display:block;width:100%;min-height:320px;resize:vertical;font:16px/1.7 Arial,sans-serif;padding:16px;color:#263f32;background:white;border:1px solid #b9c9be;border-radius:8px;box-sizing:border-box}
+body .custom-rental-editor label{display:grid;gap:8px;font-size:14px;font-weight:600;color:#304b3d}
+body .custom-rental-editor label textarea{width:100%;min-height:150px;resize:vertical;font:16px/1.7 Arial,sans-serif;padding:14px;border:1px solid #b9c9be;border-radius:8px;background:white;color:#263f32;box-sizing:border-box}
 body .custom-rental-meta{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;color:#596c5b;font-size:13px}
 body .custom-rental-meta span{white-space:nowrap;font-variant-numeric:tabular-nums}
 body .custom-rental-note{padding:14px;background:#f7efdc;border-radius:8px;font-size:14px}

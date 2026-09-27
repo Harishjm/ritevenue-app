@@ -7,6 +7,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { venues, venueTypes, money } from "@/lib/venues";
 import { defaultPricing, pricingSchema, type Pricing } from "@/lib/booking";
 import CateringPolicyEditor from "@/components/catering-policy-editor";
+import CustomCateringEditor from '@/components/custom-catering-editor';
+import CustomCateringSummary from '@/components/custom-catering-summary';
 import {
   policySchema,
   policyLabels,
@@ -542,7 +544,7 @@ export default function OwnerWorkspace({
                 admin={admin}
                 onChange={(publication) => setDraft({ ...draft, publication })}
               />
-              {!draft.rentalDetails&&<CateringPolicyEditor
+              {draft.rentalDetails?<CustomCateringEditor value={draft.cateringPolicy} onChange={cateringPolicy=>setDraft({...draft,cateringPolicy})}/>:<CateringPolicyEditor
                 value={draft.cateringPolicy}
                 onChange={(cateringPolicy) =>
                   setDraft({ ...draft, cateringPolicy })
@@ -674,7 +676,7 @@ export default function OwnerWorkspace({
                       View public venue & calendar
                     </a>
                   )}
-                  <p>
+                  {row.data.rentalDetails?<CustomCateringSummary policy={row.data.cateringPolicy}/>:<><p>
                     <strong>
                       {
                         policyLabels[
@@ -692,6 +694,7 @@ export default function OwnerWorkspace({
                     Linked supplier IDs:{" "}
                     {row.data.cateringPolicy.supplierIds.join(", ") || "None"}
                   </p>
+                  </>}
                   <p>
                     Publication route:{" "}
                     <strong>

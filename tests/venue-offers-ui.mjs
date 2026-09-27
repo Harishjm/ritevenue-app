@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 const root=resolve('.sites-runtime/offer-ui-tests');mkdirSync(root,{recursive:true});writeFileSync(resolve(root,'package.json'),'{"type":"commonjs"}');
-for(const file of ['lib/venue-capacity.ts','lib/venue-offers.ts','lib/venues.ts','components/rental-offer-editor.tsx','components/rental-offer-summary.tsx','components/venue-card-preview.tsx']){
+for(const file of ['lib/venue-capacity.ts','lib/venue-offers.ts','lib/venues.ts','lib/booking.ts','lib/catering.ts','components/custom-catering-editor.tsx','components/custom-catering-summary.tsx','components/rental-offer-editor.tsx','components/rental-offer-summary.tsx','components/venue-card-preview.tsx']){
  const dest=resolve(root,file.replace(/\.tsx?$/,'.js'));mkdirSync(dirname(dest),{recursive:true});
  const source=readFileSync(file,'utf8').replace(/(['"])@\//g,(_,quote)=>quote+(relative(dirname(dest),root)||'.')+'/');
  writeFileSync(dest,ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText);
@@ -29,6 +29,15 @@ html=renderToStaticMarkup(React.createElement(Summary,{value:custom,showPrices:f
 assert.match(html,/INR 450000\+18%\nCleaning: INR 25000/);assert.ok(!html.includes('<script>'));assert.match(html,/&lt;script&gt;/);
 assert.match(html,/Capacity: 2500/);assert.ok(!html.includes('₹0'),'Free text must not invent a numeric price');
 console.log('Passed custom venue text UI: multiline prices and GST, legacy prefill, published admin text, and HTML escaping.');
+const {policySchema}=require('./lib/catering.js'),CateringEditor=require('./components/custom-catering-editor.js').default,CateringSummary=require('./components/custom-catering-summary.js').default;
+const customPolicy=policySchema.parse({notes:'Veg: ₹850 + 18% GST per plate\nNon-veg: ₹1,400 + 18% GST per plate'});
+html=renderToStaticMarkup(React.createElement(CateringEditor,{value:customPolicy,onChange:()=>{}}));
+assert.match(html,/Catering arrangement/);assert.match(html,/Menu, per-plate prices/);assert.ok(!html.includes('Catering policy not confirmed'));
+html=renderToStaticMarkup(React.createElement(CateringSummary,{policy:customPolicy}));
+assert.match(html,/Veg: ₹850 \+ 18% GST per plate\nNon-veg: ₹1,400/);assert.ok(!html.includes('not confirmed'));assert.ok(!html.includes('₹0'));assert.ok(!html.includes('Linked supplier'));
+html=renderToStaticMarkup(React.createElement(CateringSummary,{policy:policySchema.parse({})}));assert.match(html,/Refer to the custom venue details/);assert.ok(!html.includes('not confirmed'));
+html=renderToStaticMarkup(React.createElement(CateringSummary,{policy:policySchema.parse({mode:'in_house',notes:'<script>do not execute</script>'})}));assert.match(html,/In-house catering only/);assert.ok(!html.includes('<script>'));assert.match(html,/&lt;script&gt;/);
+console.log('Passed custom catering UI: optional food arrangement and multiline per-plate notes, neutral custom-text fallback, no default unconfirmed/zero-fee/supplier labels, and escaped public notes.');
 console.log('Passed flexible offer UI: custom times, quantities vs charges, unknown values, GST labels and hidden admin-direct prices.');
 const previewModule=require('./components/venue-card-preview.js'),Preview=previewModule.default;
 const photos=Array.from({length:15},(_,i)=>'/public-photo-'+i+'.webp');
