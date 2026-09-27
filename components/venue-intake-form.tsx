@@ -5,9 +5,12 @@ import {useEffect,useRef,useState,type FormEvent} from 'react';
 import {optimizeVenuePhoto} from '@/lib/optimize-venue-photo';
 import {MAX_VENUE_PHOTOS} from '@/lib/venue-photo';
 import {venueTypes} from '@/lib/venues';
+import VenueCapacityFields from '@/components/venue-capacity-fields';
+import type {CapacityDetails} from '@/lib/venue-capacity';
 type Photo={id:string;blob:Blob;url:string;description:string;originalBytes:number;width:number;height:number};
 const size=(bytes:number)=>bytes>=1024*1024?(bytes/(1024*1024)).toFixed(1)+' MB':Math.ceil(bytes/1024)+' KB';
 export default function VenueIntakeForm(){
+ const [guestCapacity,setGuestCapacity]=useState<{capacity:number|null;capacityDetails?:CapacityDetails|null}>({capacity:null,capacityDetails:null});
  const [busy,setBusy]=useState(false),[optimizing,setOptimizing]=useState(false),[error,setError]=useState(''),[reference,setReference]=useState(''),[photos,setPhotos]=useState<Photo[]>([]);
  const key=useRef(''),sending=useRef(false),processing=useRef(false),urls=useRef(new Set<string>());
  useEffect(()=>()=>{for(const url of urls.current)URL.revokeObjectURL(url);},[]);
@@ -25,7 +28,7 @@ export default function VenueIntakeForm(){
  async function submit(event:FormEvent<HTMLFormElement>){
   event.preventDefault();if(sending.current||processing.current)return;sending.current=true;setBusy(true);setError('');
   const form=new FormData(event.currentTarget);if(!key.current)key.current=crypto.randomUUID();
-    const application={requestKey:key.current,venueName:form.get('venueName'),city:form.get('city'),locality:form.get('locality'),venueType:form.get('venueType'),contactName:form.get('contactName'),email:form.get('email'),phone:form.get('phone'),capacity:Number(form.get('capacity')),notes:form.get('notes'),consent:form.get('consent')==='on',website:form.get('website'),photoDescriptions:photos.map(photo=>photo.description),photoConsent:photos.length>0&&form.get('photoConsent')==='on'};
+    const application={requestKey:key.current,venueName:form.get('venueName'),city:form.get('city'),locality:form.get('locality'),venueType:form.get('venueType'),contactName:form.get('contactName'),email:form.get('email'),phone:form.get('phone'),capacity:guestCapacity.capacity,capacityDetails:guestCapacity.capacityDetails,notes:form.get('notes'),consent:form.get('consent')==='on',website:form.get('website'),photoDescriptions:photos.map(photo=>photo.description),photoConsent:photos.length>0&&form.get('photoConsent')==='on'};
   const multipart=new FormData();multipart.append('application',JSON.stringify(application));
   photos.forEach((photo,index)=>multipart.append('photos',photo.blob,'venue-photo-'+(index+1)+'.webp'));
   try{
@@ -46,7 +49,7 @@ export default function VenueIntakeForm(){
    <label>Your name<input name="contactName" required minLength={2} maxLength={100} autoComplete="name"/></label>
    <label>Email address<input name="email" type="email" required maxLength={254} autoComplete="email"/></label>
    <label>Contact number<input name="phone" type="tel" required minLength={8} maxLength={24} autoComplete="tel"/></label>
-   <label>Guest capacity<input name="capacity" type="number" min={1} max={50000} required inputMode="numeric"/></label>
+   <div className="intake-wide"><VenueCapacityFields value={guestCapacity} onChange={setGuestCapacity}/></div>
    <label className="intake-wide">Anything else? <span className="muted">Optional</span><textarea name="notes" rows={4} maxLength={2000} placeholder="Tell us about your halls, lawn, packages or preferred contact time."/></label>
   </div>
   <section className="intake-photo-section" aria-labelledby="venue-photo-heading"><h2 id="venue-photo-heading">Venue photographs <span className="muted">Optional</span></h2><p>Show your hall, entrance, dining area or outdoor spaces. We’ll resize and compress your photos automatically before uploading.</p>

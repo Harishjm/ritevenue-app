@@ -5,7 +5,7 @@ import {createRequire} from 'node:module';
 import {DatabaseSync} from 'node:sqlite';
 import assert from 'node:assert/strict';
 const root=resolve('.sites-runtime/prototype-tests');mkdirSync(root,{recursive:true});writeFileSync(resolve(root,'package.json'),'{"type":"commonjs"}');
-for(const file of ['lib/venue-offers.ts','lib/venue-photo.ts','lib/slugify.ts','lib/venue-image.ts','lib/intake-photo-server.ts','lib/venue-intake.ts','app/api/venue-applications/route.ts','lib/launch.ts','lib/publication.ts','lib/public-venues.ts','app/api/public/[action]/route.ts','lib/venues.ts','lib/catering.ts','lib/catering-server.ts','app/api/catering/[action]/route.ts','lib/booking.ts','lib/owner-venue.ts','lib/db.ts','lib/demo-server.ts','lib/calendar.ts','app/api/demo/[action]/route.ts']){
+for(const file of ['lib/venue-capacity.ts','lib/venue-offers.ts','lib/venue-photo.ts','lib/slugify.ts','lib/venue-image.ts','lib/intake-photo-server.ts','lib/venue-intake.ts','app/api/venue-applications/route.ts','lib/launch.ts','lib/publication.ts','lib/public-venues.ts','app/api/public/[action]/route.ts','lib/venues.ts','lib/catering.ts','lib/catering-server.ts','app/api/catering/[action]/route.ts','lib/booking.ts','lib/owner-venue.ts','lib/db.ts','lib/demo-server.ts','lib/calendar.ts','app/api/demo/[action]/route.ts']){
  let source=readFileSync(file,'utf8').replace("import {env} from 'cloudflare:workers';",'const env=globalThis.__testEnv;');
  if(file==='lib/demo-server.ts')source=source.replace("import {getAuthenticatedUser,isAdminUser,type AuthUser} from './auth';",'type AuthUser=any;async function getAuthenticatedUser(){return globalThis.__testUser;}function isAdminUser(user){return user?.email===globalThis.__testEnv.RITEVENUE_ADMIN_EMAIL;}');
  const dest=resolve(root,file.replace(/\.ts$/,'.js'));mkdirSync(dirname(dest),{recursive:true});
@@ -505,6 +505,53 @@ assert.equal((await post('drafts',{...flexDraft,publication:adminRights})).statu
 assert.equal((await post('review',{id:flexId,status:'approved_public',note:'Independent rights reviewed for fixture.',expectedUpdatedAt:sql.prepare('SELECT updated_at FROM owner_drafts WHERE id=?').get(flexId).updated_at})).status,200);
 assert.equal((await (await pget('catalog')).json()).venues.find(v=>v.slug==='owner-'+flexId).rentalDetails,null,'Admin-direct financial details remain unconfirmed and private');
 console.log('Passed flexible venue offers: custom overnight times, inclusive/extra GST, unknown prices, space combinations, scoped cleaning/menu charges, city/capacity, legacy compatibility, publication privacy and disabled legacy booking.');
+// Custom prose is an explicit public listing field for both publication routes.
+const customText='The Windflower Resorts & Spa, Mysore!!\n\nPavillion Lawn, Hall & Grove: INR. 525000+18% (Without Food)\n\nVeg: INR. 850+18% Per Person\nPlantain Leaf: INR. 950+18%\nNon-Veg: INR. 1400+18%\n\nLawn + Hall: INR.450000+18% & Cleaning: INR.25000+ Menu Charges\nGrove + Hall: INR.200000+18% Menu Charges.\nCapacity: 2500';
+const customDetails={version:2,text:customText};
+assert.equal(offersDomain.rentalDetailsSchema.safeParse(customDetails).success,true);
+for(const invalid of [{version:2,text:'  \n '},{version:2,text:'x'.repeat(5001)},{version:2,text:42},{version:3,text:'Invalid version'}])assert.equal(offersDomain.rentalDetailsSchema.safeParse(invalid).success,false);
+const convertedText=offersDomain.rentalDetailsText(resort);
+for(const value of ['Lawn + Hall','Grove + Hall','INR 4,50,000','+ 18% GST','Cleaning','INR 25,000','Applies to: Lawn + Hall','INR 850','All offers'])assert.ok(convertedText.includes(value),value);
+assert.deepEqual(offersDomain.rentalDetailsSchema.parse(resort),resort,'Reading existing structured details does not change them');
+for(const source of ['owner','admin']){
+ const customId=crypto.randomUUID(),customDraft={...flexDraft,id:customId,rentalDetails:customDetails,publication:source==='admin'?adminRights:flexDraft.publication,submit:false};
+ assert.equal((await post('drafts',customDraft)).status,200);
+ assert.ok(!(await (await pget('catalog')).json()).venues.some(v=>v.slug==='owner-'+customId),'Draft custom text stays private');
+ const saved=JSON.parse(sql.prepare('SELECT data_json FROM owner_drafts WHERE id=?').get(customId).data_json);
+ assert.deepEqual(saved.rentalDetails,customDetails);assert.equal(saved.pricing.rent,0);assert.equal(ownerDomain.ownerListing(customId,JSON.stringify(saved)).bookable,false);
+ assert.equal((await post('drafts',{...customDraft,submit:true})).status,200);
+ assert.equal((await post('review',{id:customId,status:'approved_public',note:'Reviewed custom listing text.',expectedUpdatedAt:sql.prepare('SELECT updated_at FROM owner_drafts WHERE id=?').get(customId).updated_at})).status,200);
+ const publishedCustom=(await (await pget('catalog')).json()).venues.find(v=>v.slug==='owner-'+customId);
+ assert.deepEqual(publishedCustom.rentalDetails,customDetails);assert.equal(publishedCustom.pricing,null);assert.equal(publishedCustom.capacity,2500);
+ assert.equal((await post('drafts',{...customDraft,rentalDetails:{version:2,text:customText+'\nRevised'}})).status,200);
+ assert.ok(!(await (await pget('catalog')).json()).venues.some(v=>v.slug==='owner-'+customId),'Editing custom details withdraws the listing until reviewed again');
+}
+console.log('Passed custom venue details: validation, legacy conversion, draft persistence, owner/admin publication, edit withdrawal and exclusion from booking calculations.');
 const cityIntakeResponse=await submitIntake({...intake,requestKey:crypto.randomUUID(),city:'Mysore',venueType:'Resort'},{'cf-connecting-ip':'192.0.2.93'});assert.equal(cityIntakeResponse.status,201);
 const cityIntakeId=(await cityIntakeResponse.json()).reference,cityConversion=await post('convert_intake',{id:cityIntakeId});assert.equal(cityConversion.status,201);
 const cityDraft=JSON.parse(sql.prepare('SELECT data_json FROM owner_drafts WHERE id=?').get((await cityConversion.json()).id).data_json);assert.equal(cityDraft.city,'Mysore');assert.ok(cityDraft.address.endsWith(', Mysore'));
+
+// Capacity details survive onboarding and publishing; the maximum remains authoritative.
+const capacityDomain=require('./lib/venue-capacity.js');
+const counts={minimum:500,seated:1000,floating:1500};
+assert.equal(ownerDomain.draftSchema.parse(draft).capacityDetails,null,'Older maximum-only drafts remain valid');
+assert.equal(capacityDomain.capacityLabel(1500,counts),'500–1,500 guests');
+assert.equal(capacityDomain.capacityLabel(1500),'Up to 1,500 guests');
+for(const bad of [{minimum:1501,seated:null,floating:null},{minimum:null,seated:1501,floating:null},{minimum:null,seated:null,floating:1501},{minimum:0,seated:null,floating:null},{minimum:null,seated:1.5,floating:null}]){
+ assert.equal(ownerDomain.draftSchema.safeParse({...draft,capacity:1500,capacityDetails:bad}).success,false);
+ assert.equal((await submitIntake({...intake,requestKey:crypto.randomUUID(),capacity:1500,capacityDetails:bad},{'cf-connecting-ip':'192.0.2.95'})).status,400);
+}
+assert.equal(ownerDomain.draftSchema.safeParse({...draft,capacity:null,capacityDetails:counts}).success,false,'An empty maximum cannot become a saved zero');
+const capacityIntake=await submitIntake({...intake,requestKey:crypto.randomUUID(),capacity:1500,capacityDetails:counts},{'cf-connecting-ip':'192.0.2.95'});assert.equal(capacityIntake.status,201);
+const capacityIntakeId=(await capacityIntake.json()).reference;
+assert.deepEqual(JSON.parse(sql.prepare('SELECT data_json FROM public_venue_intakes WHERE id=?').get(capacityIntakeId).data_json).capacityDetails,counts);
+const capacityConversion=await post('convert_intake',{id:capacityIntakeId});assert.equal(capacityConversion.status,201);
+const capacityId=(await capacityConversion.json()).id;
+const capacityDraft=JSON.parse(sql.prepare('SELECT data_json FROM owner_drafts WHERE id=?').get(capacityId).data_json);
+assert.deepEqual(capacityDraft.capacityDetails,counts);assert.equal(capacityDraft.capacity,1500);
+assert.equal((await post('drafts',{...capacityDraft,publication:adminRights,rightsConfirmed:true,images:[directPhoto,directPhoto2],submit:true})).status,200);
+assert.equal((await post('review',{id:capacityId,status:'approved_public',note:'Capacity fixture checked.',expectedUpdatedAt:sql.prepare('SELECT updated_at FROM owner_drafts WHERE id=?').get(capacityId).updated_at})).status,200);
+const publicCapacity=(await (await pget('catalog')).json()).venues.find(v=>v.slug==='owner-'+capacityId);
+assert.deepEqual(publicCapacity.capacityDetails,counts);assert.equal(publicCapacity.capacity,1500,'Seated and floating values must not be added together');
+assert.equal(ownerDomain.ownerListing(capacityId,sql.prepare('SELECT data_json FROM owner_drafts WHERE id=?').get(capacityId).data_json).venue.capacity,1500);
+console.log('Passed guest capacity: optional ranges, seated/floating bounds, blank/zero/decimal rejection, legacy records, intake conversion, publication and unchanged authoritative maximum.');

@@ -2,6 +2,7 @@ import type {RentalDetails} from '@/lib/venue-offers';
 import {taxLabel,offerHours} from '@/lib/venue-offers';
 import {money} from '@/lib/venues';
 export default function RentalOfferSummary({value,showPrices=true}:{value:RentalDetails;showPrices?:boolean}){
+ if(value.version===2)return <section className="custom-rental-summary"><h3>Packages, facilities & pricing notes</h3><div className="custom-rental-copy">{value.text}</div><p className="muted">Confirm current prices, taxes, inclusions and availability with the venue before making arrangements.</p></section>;
  const amount=(n:number|null)=>n===null?'Price on request':money(n/100);
  const applies=(ids:string[])=>ids.length?ids.map(id=>value.offers.find(o=>o.id===id)?.name).join(', '):'All offers';
  return <section className="stack-form"><h3>Rental offers & inclusions</h3><p>Reported information only. No online booking or payment. Confirm the final quote, taxes, setup access and terms with the venue.</p>

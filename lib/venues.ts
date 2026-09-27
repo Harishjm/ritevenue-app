@@ -1,6 +1,7 @@
+import type {CapacityDetails} from './venue-capacity';
 import type {CateringPolicy} from './catering';
 import type {PackageAvailability} from './owner-venue';
-export type Venue={cateringPolicy?:CateringPolicy;packageAvailability?:PackageAvailability;source?:'owner';images?:string[];address?:string;slug:string;name:string;city:string;area:string;type:string;occasions:string[];capacity:number;price:number;image:string;amenities:string[];description:string};
+export type Venue={cateringPolicy?:CateringPolicy;packageAvailability?:PackageAvailability;source?:'owner';images?:string[];address?:string;slug:string;name:string;city:string;area:string;type:string;occasions:string[];capacity:number;capacityDetails?:CapacityDetails|null;price:number;image:string;amenities:string[];description:string};
 export const cities=['All Bengaluru','Bengaluru'];
 export const occasions=['All occasions','Wedding','Reception','Birthday','Engagement','Corporate event'];
 export const venueTypes=['All venues','Outdoor venue','Resort','Hotel','Party hall','Wedding hall'];

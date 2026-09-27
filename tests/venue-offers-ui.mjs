@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 const root=resolve('.sites-runtime/offer-ui-tests');mkdirSync(root,{recursive:true});writeFileSync(resolve(root,'package.json'),'{"type":"commonjs"}');
-for(const file of ['lib/venue-offers.ts','lib/venues.ts','components/rental-offer-editor.tsx','components/rental-offer-summary.tsx','components/venue-card-preview.tsx']){
+for(const file of ['lib/venue-capacity.ts','lib/venue-offers.ts','lib/venues.ts','components/rental-offer-editor.tsx','components/rental-offer-summary.tsx','components/venue-card-preview.tsx']){
  const dest=resolve(root,file.replace(/\.tsx?$/,'.js'));mkdirSync(dirname(dest),{recursive:true});
  const source=readFileSync(file,'utf8').replace(/(['"])@\//g,(_,quote)=>quote+(relative(dirname(dest),root)||'.')+'/');
  writeFileSync(dest,ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText);
@@ -20,7 +20,15 @@ assert.match(html,/06:00–15:00/);assert.match(html,/70,000/);assert.match(html
 html=renderToStaticMarkup(React.createElement(Summary,{value:details,showPrices:false}));assert.ok(!html.includes('70,000'));assert.match(html,/Venue confirmation required/);
 details.offers[0].amount=null;html=renderToStaticMarkup(React.createElement(Summary,{value:details}));assert.match(html,/Price on request/);assert.ok(!html.includes('₹0'));
 html=renderToStaticMarkup(React.createElement(Editor,{value:details,onChange:()=>{}}));
-for(const label of ['GST treatment','Start time','End time','Add space','Add rental offer','Add charge','Add menu','Minimum billable guests'])assert.ok(html.includes(label),label);
+assert.match(html,/<textarea/);assert.match(html,/Custom venue details/);assert.match(html,/AC rooms with attached restroom × 2/);assert.match(html,/06:00–15:00/);
+assert.ok(!html.includes('Add rental offer'),'Custom editing no longer requires structured offer fields');
+const custom={version:2,text:'The Windflower Resorts & Spa, Mysore!!\n\nPavillion Lawn + Hall: INR 450000+18%\nCleaning: INR 25000\nCapacity: 2500\n<script>alert("test")</script>'};
+html=renderToStaticMarkup(React.createElement(Editor,{value:custom,onChange:()=>{}}));
+assert.match(html,/Preview listing text/);assert.match(html,/maxLength="5000"/);
+html=renderToStaticMarkup(React.createElement(Summary,{value:custom,showPrices:false}));
+assert.match(html,/INR 450000\+18%\nCleaning: INR 25000/);assert.ok(!html.includes('<script>'));assert.match(html,/&lt;script&gt;/);
+assert.match(html,/Capacity: 2500/);assert.ok(!html.includes('₹0'),'Free text must not invent a numeric price');
+console.log('Passed custom venue text UI: multiline prices and GST, legacy prefill, published admin text, and HTML escaping.');
 console.log('Passed flexible offer UI: custom times, quantities vs charges, unknown values, GST labels and hidden admin-direct prices.');
 const previewModule=require('./components/venue-card-preview.js'),Preview=previewModule.default;
 const photos=Array.from({length:15},(_,i)=>'/public-photo-'+i+'.webp');

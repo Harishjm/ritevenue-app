@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { Save, Send, ShieldCheck, RefreshCw, X } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -29,7 +29,11 @@ import { optimizeVenuePhoto } from "@/lib/optimize-venue-photo";
 import { demoApi } from "@/lib/demo-client";
 import RentalOfferEditor from '@/components/rental-offer-editor';
 import RentalOfferSummary from '@/components/rental-offer-summary';
-import {newRentalDetails,type RentalDetails} from '@/lib/venue-offers';
+import VenueDetailsMode from '@/components/venue-details-mode';
+import VenueCapacityFields from '@/components/venue-capacity-fields';
+import VenueCapacitySummary from '@/components/venue-capacity-summary';
+import {capacityLabel,type CapacityDetails} from '@/lib/venue-capacity';
+import {newCustomRentalDetails,type RentalDetails} from '@/lib/venue-offers';
 import {draftSchema} from '@/lib/owner-venue';
 type Draft = {
   city: string;
@@ -42,7 +46,8 @@ type Draft = {
   locality: string;
   address: string;
   type: string;
-  capacity: number;
+  capacity: number | null;
+  capacityDetails: CapacityDetails | null;
   description: string;
   pricing: Pricing;
   images: string[];
@@ -60,7 +65,8 @@ const blank = (): Draft => ({
   locality: "",
   address: "",
   type: "",
-  capacity: 200,
+  capacity: null,
+  capacityDetails: null,
   description: "",
   pricing: pricingSchema.parse({
     rent: 10000000,
@@ -183,6 +189,18 @@ export default function OwnerWorkspace({
   adminView?: boolean;
 }) {
   const [draft, setDraft] = useState<Draft | null>(null);
+  const rentalModes=useRef(new Map<string,{custom?:RentalDetails;pricing?:Pricing;availability?:PackageAvailability}>());
+  function switchCustomDetails(enabled:boolean){
+    if(!draft||!!draft.rentalDetails===enabled)return;
+    const saved=rentalModes.current.get(draft.id)||{};
+    if(enabled){
+      rentalModes.current.set(draft.id,{...saved,pricing:draft.pricing,availability:draft.packageAvailability});
+      setDraft({...draft,rentalDetails:saved.custom||newCustomRentalDetails()});
+    }else{
+      rentalModes.current.set(draft.id,{...saved,custom:draft.rentalDetails||undefined});
+      setDraft({...draft,rentalDetails:null,pricing:saved.pricing||(draft.pricing.rent>0?draft.pricing:blank().pricing),packageAvailability:saved.availability||packageAvailabilitySchema.parse({})});
+    }
+  }
   const [rows, setRows] = useState<any[]>([]);
   const [bookings, setBookings] = useState<any[]>([]);
   const [prices, setPrices] = useState<Record<string, Pricing>>({});
@@ -233,6 +251,7 @@ export default function OwnerWorkspace({
   }, [admin, refresh]);
   async function save(submit: boolean) {
     if (!draft) return;
+    if(draft.capacity===null){setError('Enter the maximum number of guests your venue can host.');return;}
     if (submit && draft.images.length < MIN_LISTING_PHOTOS) {
       setError("Add at least two venue photos before submitting.");
       return;
@@ -465,20 +484,8 @@ export default function OwnerWorkspace({
                     ))}
                   </select>
                 </label>
-                <label>
-                  Maximum guests
-                  <input
-                    required
-                    min="1"
-                    max="50000"
-                    type="number"
-                    value={draft.capacity}
-                    onChange={(e) =>
-                      setDraft({ ...draft, capacity: Number(e.target.value) })
-                    }
-                  />
-                </label>
               </div>
+              <VenueCapacityFields key={draft.id} value={draft} onChange={value=>setDraft({...draft,capacity:value.capacity,capacityDetails:value.capacityDetails||null})}/>
               <label>
                 Address
                 <input
@@ -503,7 +510,7 @@ export default function OwnerWorkspace({
                   }
                 />
               </label>
-              <label className="addon-option"><input type="checkbox" checked={!!draft.rentalDetails} onChange={e=>setDraft({...draft,rentalDetails:e.target.checked?newRentalDetails():null,pricing:e.target.checked?draft.pricing:blank().pricing,packageAvailability:e.target.checked?draft.packageAvailability:packageAvailabilitySchema.parse({})})}/>Use flexible offers: custom times, GST, spaces, menus and inclusions</label>
+              <VenueDetailsMode custom={!!draft.rentalDetails} onChange={switchCustomDetails}/>
               {draft.rentalDetails?<RentalOfferEditor value={draft.rentalDetails} onChange={rentalDetails=>setDraft({...draft,rentalDetails})}/>:<>
               <h3>Package rentals & mandatory charges</h3>
               <PricingFields
@@ -535,12 +542,12 @@ export default function OwnerWorkspace({
                 admin={admin}
                 onChange={(publication) => setDraft({ ...draft, publication })}
               />
-              <CateringPolicyEditor
+              {!draft.rentalDetails&&<CateringPolicyEditor
                 value={draft.cateringPolicy}
                 onChange={(cateringPolicy) =>
                   setDraft({ ...draft, cateringPolicy })
                 }
-              />
+              />}
               <label className="addon-option">
                 <Checkbox
                   checked={draft.rightsConfirmed}
@@ -639,13 +646,14 @@ export default function OwnerWorkspace({
                       <h2>{row.data.name}</h2>
                       <p>
                         {row.data.locality}, {row.data.city} · {row.data.type} ·{" "}
-                        {row.data.capacity} guests
+                        {capacityLabel(row.data.capacity,row.data.capacityDetails)}
                       </p>
                     </div>
                     <button
                       className="filter-button"
                       disabled={busy}
                       onClick={() => {
+                        rentalModes.current.delete(row.data.id);
                         setDraft(row.data);
                         setPhotoProgress({ completed: 0, total: 0 });
                         setError("");
@@ -732,6 +740,7 @@ export default function OwnerWorkspace({
                     )}
                   <p>{row.data.address}</p>
                   <p>{row.data.description}</p>
+                  <VenueCapacitySummary capacity={row.data.capacity} details={row.data.capacityDetails}/>
                   {row.data.rentalDetails?<RentalOfferSummary value={row.data.rentalDetails}/>:<p>
                     24-hour Marriage:{" "}
                     {rentalSummary(
