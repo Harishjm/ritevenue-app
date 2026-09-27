@@ -590,16 +590,33 @@ export default function OwnerWorkspace({
               <p className="muted">
                 Add 2–15 photos. Photos remain private unless the selected
                 publication route is confirmed and admin publishes the listing.
+                {' '}Choose a cover for the listing card and venue banner, then save your changes.
               </p>
               <div className="draft-photos">
-                {draft.images.map((id) => (
+                {draft.images.map((id, index) => (
                   <div key={id}>
                     <img
                       src={"/api/demo/image?id=" + id}
-                      alt="Uploaded venue draft"
+                      alt={`${draft.name || 'Venue'} photo ${index + 1}${index === 0 ? ' — cover' : ''}`}
                       width="160"
                       height="120"
                     />
+                    {index === 0 ? (
+                      <span className="draft-cover-label">Cover photo</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="draft-cover-button"
+                        disabled={busy}
+                        aria-label={`Set photo ${index + 1} as cover`}
+                        onClick={() => setDraft(current => current ? {
+                          ...current,
+                          images: [id, ...current.images.filter(image => image !== id)],
+                        } : current)}
+                      >
+                        Set as cover
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="icon-button"

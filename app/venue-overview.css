@@ -1,0 +1,9 @@
+body .venue-overview{margin:32px 0 40px}
+body .venue-address{display:flex;align-items:flex-start;gap:14px;padding:20px 24px;margin-bottom:32px;border:1px solid #dce7df;border-radius:10px;background:#f4f8f5}
+body .venue-address>svg{flex-shrink:0;margin-top:3px;color:#155c49}
+body .venue-address-label{margin:0 0 6px;font-size:13px;font-weight:700;color:#155c49}
+body .venue-address-text{margin:0;font-size:16px;line-height:1.65;color:#30463d;overflow-wrap:anywhere}
+body .venue-overview h2{margin:0 0 20px;font:700 clamp(26px,3vw,34px)/1.25 Georgia,serif;color:#183e34}
+body .venue-overview h2::after{content:"";display:block;width:44px;height:3px;margin-top:12px;background:#c99536;border-radius:2px}
+body .venue-overview-description{max-width:85ch;margin:0;font-size:17px;line-height:1.85;color:#53645a;white-space:pre-line;overflow-wrap:anywhere}
+@media(max-width:600px){body .venue-overview{margin:24px 0 32px}body .venue-address{padding:16px;gap:10px;margin-bottom:26px}body .venue-address-text,body .venue-overview-description{font-size:15px}}

@@ -597,3 +597,13 @@ assert.equal(sitemapEntries.some(entry=>entry.url.endsWith(venuePublicSlug(renam
 globalThis.__testEnv.RITEVENUE_DEPLOYMENT='standalone_cloudflare_staging';
 assert.deepEqual(await sitemap(),[],'Staging must not advertise indexable venue URLs');
 console.log('Passed canonical-only production sitemap and staging indexing protection.');
+
+const coverOrder=[directPhoto2,directPhoto];
+assert.equal((await post('drafts',{...renamedCapacity,images:coverOrder,submit:true})).status,200);
+assert.deepEqual(JSON.parse(sql.prepare('SELECT data_json FROM owner_drafts WHERE id=?').get(capacityId).data_json).images,coverOrder,'The chosen cover must survive saving the draft');
+assert.equal(await resolvePublicVenue(publicCapacity.slug),null,'Selecting a cover follows the existing review-before-publication workflow');
+assert.equal((await post('review',{id:capacityId,status:'approved_public',note:'Cover photo order checked.',expectedUpdatedAt:sql.prepare('SELECT updated_at FROM owner_drafts WHERE id=?').get(capacityId).updated_at})).status,200);
+const coverListing=await resolvePublicVenue(publicCapacity.slug);
+assert.ok(coverListing.images[0].startsWith('/api/public/image/'+directPhoto2+'/'),'The selected cover must lead the public card and gallery');
+assert.ok(coverListing.images[1].startsWith('/api/public/image/'+directPhoto+'/'),'Other photos must remain available after cover selection');
+console.log('Passed cover photo ordering through draft saving, review and public publication.');
