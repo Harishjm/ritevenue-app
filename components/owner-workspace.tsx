@@ -192,6 +192,20 @@ export default function OwnerWorkspace({
   adminView?: boolean;
 }) {
   const [draft, setDraft] = useState<Draft | null>(null);
+  const editorRef = useRef<HTMLFormElement>(null);
+  const revealEditor = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.querySelector<HTMLInputElement>('input')?.focus({preventScroll:true});
+    editor.scrollIntoView({
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+      block: 'start',
+    });
+  }, []);
+  const editingId = draft?.id;
+  useEffect(() => {
+    if (editingId) revealEditor();
+  }, [editingId, revealEditor]);
   const rentalModes=useRef(new Map<string,{custom?:RentalDetails;pricing?:Pricing;availability?:PackageAvailability}>());
   function switchCustomDetails(enabled:boolean){
     if(!draft||!!draft.rentalDetails===enabled)return;
@@ -425,6 +439,7 @@ export default function OwnerWorkspace({
         <TabsContent value="listings">
           {draft ? (
             <form
+              ref={editorRef}
               className="owner-editor stack-form"
               onSubmit={(e) => {
                 e.preventDefault();
@@ -653,11 +668,13 @@ export default function OwnerWorkspace({
                       </p>
                     </div>
                     <button
+                      type="button"
                       className="filter-button"
                       disabled={busy}
                       onClick={() => {
                         rentalModes.current.delete(row.data.id);
                         setDraft(row.data);
+                        if (draft?.id === row.id) revealEditor();
                         setPhotoProgress({ completed: 0, total: 0 });
                         setError("");
                         setNotice(
