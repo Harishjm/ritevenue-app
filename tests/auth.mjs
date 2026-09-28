@@ -41,9 +41,9 @@ Object.assign(globalThis.__testEnv,{RITEVENUE_GOOGLE_CLIENT_ID:'test-client.apps
 const google=require('./lib/google-auth.js'),route=require('./app/api/auth/[action]/route.js');
 const ctx=action=>({params:Promise.resolve({action})});
 const startRequest=(body='return_to=%2Fadmin%2Fenquiries',origin='https://ritevenue.test')=>new Request('https://ritevenue.test/api/auth/google-start',{method:'POST',headers:{origin,'content-type':'application/x-www-form-urlencoded'},body});
-async function start(returnTo='/admin/enquiries'){
+async function start(returnTo='/admin/enquiries',audience='admin'){
  sql.exec('DELETE FROM auth_rate_limits');
- const response=await route.POST(startRequest(new URLSearchParams({return_to:returnTo}).toString()),ctx('google-start'));
+ const response=await route.POST(startRequest(new URLSearchParams({return_to:returnTo,audience}).toString()),ctx('google-start'));
  assert.equal(response.status,303);const authorization=new URL(response.headers.get('location'));
  assert.equal(authorization.origin,'https://accounts.google.com');assert.equal(authorization.searchParams.get('scope'),'openid email');
  assert.equal(authorization.searchParams.get('code_challenge_method'),'S256');assert.equal(authorization.searchParams.get('access_type'),'online');
@@ -90,6 +90,14 @@ try{
  const outage=await start();globalThis.fetch=async()=>new Response(null,{status:500});const count=sessionCount();assert.equal((await route.GET(callback(outage),ctx('google-callback'))).headers.get('location'),'/admin/sign-in?error=google');assert.equal(sessionCount(),count);
  const canonical=await google.startGoogleSignIn(new Request('https://alternate.test/api/auth/google-start',{method:'POST',headers:{origin:'https://alternate.test'}}),'/admin/enquiries');assert.equal(new URL(canonical.headers.get('location')).origin,'https://ritevenue.test');assert.equal(canonical.headers.get('set-cookie'),null);
  sql.exec('DELETE FROM auth_rate_limits');for(let i=0;i<20;i++)await google.startGoogleSignIn(startRequest(),'/admin');await assert.rejects(()=>google.startGoogleSignIn(startRequest(),'/admin'),e=>e.status===429);
+ const ownerFlow=await start('/owner?resume=1','owner');await mockToken(ownerFlow,{sub:'stable-owner-subject',email:'owner@example.test'});
+ const ownerLogin=await google.finishGoogleSignIn(callback(ownerFlow));assert.equal(ownerLogin.headers.get('location'),'/owner?resume=1');
+ const ownerCookie=ownerLogin.headers.getSetCookie().find(c=>c.startsWith('rv_session=')).split(';')[0],owner=await auth.getAuthenticatedUser(request(ownerCookie));assert.equal(owner.role,'owner');assert.equal(auth.isAdminUser(owner),false);
+ const renamedOwner=await start('/admin','owner');await mockToken(renamedOwner,{sub:'stable-owner-subject',email:'new-owner-email@example.test'});const renamedLogin=await google.finishGoogleSignIn(callback(renamedOwner));assert.equal(renamedLogin.headers.get('location'),'/owner');
+ const renamedCookie=renamedLogin.headers.getSetCookie().find(c=>c.startsWith('rv_session=')).split(';')[0];assert.equal((await auth.getAuthenticatedUser(request(renamedCookie))).userId,owner.userId);assert.equal(sql.prepare('SELECT count(*) n FROM owner_accounts').get().n,1);
+ const forgedAudience=await start('/admin','admin');await mockToken(forgedAudience,{sub:'stable-owner-subject',email:'owner@example.test'});await assert.rejects(()=>google.finishGoogleSignIn(new Request(callback(forgedAudience).url,{headers:{cookie:forgedAudience.cookie+'; rv_google_audience=owner'}})),e=>e.status===403);
+ const unverifiedOwner=await start('/owner','owner');await mockToken(unverifiedOwner,{sub:'unverified-owner',email:'owner@example.test',email_verified:false});await assert.rejects(()=>google.finishGoogleSignIn(callback(unverifiedOwner)),e=>e.status===403);
  delete globalThis.__testEnv.RITEVENUE_GOOGLE_CLIENT_SECRET;assert.equal((await route.POST(startRequest(),ctx('google-start'))).headers.get('location'),'/admin/sign-in?error=google');
+ console.log('Passed owner Google sign-in: verified accounts, stable subject-based identity, separate admin allowlist, server-bound audience and owner-only return paths.');
  console.log('Passed Google admin auth: signed-token verification, issuer/audience/nonce/expiry, exact verified-email allowlist, subject binding, PKCE, CSRF, browser state, callback replay/races, rate limits, safe redirects, session/logout, provider errors and disabled OTP endpoints.');
 }finally{globalThis.fetch=realFetch;}

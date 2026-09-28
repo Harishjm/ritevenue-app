@@ -1,4 +1,7 @@
 import VenueIntakeForm from '@/components/venue-intake-form';
+import OwnerStart from '@/components/owner-start';
 import {SITE_ORIGIN} from '@/lib/launch';
-export const metadata={title:'List your venue — Bengaluru and beyond',description:'Submit your hotel, resort or event venue to RiteVenue for review. Bengaluru-first; free listing and no account needed to apply.',alternates:{canonical:SITE_ORIGIN+'/list-your-venue'}};
-export default function ListYourVenue(){return <main className="content-page intake-page"><p className="eyebrow">RITEVENUE / VENUE PARTNERS</p><h1>Bring your venue to RiteVenue.</h1><p className="workspace-intro">Share a few details to start onboarding. Free listing. No account needed to apply.</p><VenueIntakeForm/><div className="notice">Owner self-service accounts are being prepared. The RiteVenue team will contact you after reviewing your application.</div></main>;}
+import {canonicalOwnerEntry} from '@/lib/owner-entry';
+export const dynamic='force-dynamic';
+export const metadata={title:'List your venue — Bengaluru and beyond',description:'Create a venue listing, upload photos and save your progress. Sign in with Google to manage your venue or ask the RiteVenue team for assistance.',alternates:{canonical:SITE_ORIGIN+'/list-your-venue'}};
+export default async function ListYourVenue(){await canonicalOwnerEntry('/list-your-venue');return <main className="content-page intake-page"><p className="eyebrow">RITEVENUE / VENUE PARTNERS</p><h1>Bring your venue to RiteVenue.</h1><p className="workspace-intro">Free listing. Start with the basics, then save your progress and return whenever you’re ready.</p><OwnerStart/><details className="owner-start"><summary>Prefer help from our team? Submit without an account</summary><p>Send an application and our team will contact you. To manage it yourself later, ask us to assign it to your Google account.</p><VenueIntakeForm/></details></main>;}

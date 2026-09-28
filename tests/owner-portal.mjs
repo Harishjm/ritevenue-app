@@ -1,0 +1,90 @@
+import ts from 'typescript';
+import {mkdirSync,readFileSync,writeFileSync,readdirSync} from 'node:fs';
+import {resolve,dirname,relative} from 'node:path';
+import {createRequire} from 'node:module';
+import {DatabaseSync} from 'node:sqlite';
+import assert from 'node:assert/strict';
+
+const root=resolve('.sites-runtime/owner-portal-tests');mkdirSync(root,{recursive:true});writeFileSync(resolve(root,'package.json'),'{"type":"commonjs"}');
+const files=[...readdirSync('lib').filter(f=>f.endsWith('.ts')).map(f=>'lib/'+f),'app/api/owner/route.ts','app/api/owner/photos/route.ts','app/api/demo/[action]/route.ts'];
+for(const file of files){
+ let source=readFileSync(file,'utf8').replace("import {env} from 'cloudflare:workers';",'const env=globalThis.__portalEnv;').replace("import {headers} from 'next/headers';",'async function headers(){return new Headers();}').replace("import {redirect} from 'next/navigation';",'function redirect(path){throw new Error("REDIRECT:"+path);}');
+ const dest=resolve(root,file.replace(/\.ts$/,'.js'));mkdirSync(dirname(dest),{recursive:true});source=source.replace(/(['"])@\//g,(_,quote)=>quote+(relative(dirname(dest),root)||'.')+'/');
+ writeFileSync(dest,ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText);
+}
+const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+file,'utf8'));
+class Statement{constructor(text,args=[]){this.text=text;this.args=args;}bind(...args){return new Statement(this.text,args);}first(){return sql.prepare(this.text).all(...this.args)[0]||null;}all(){return {results:sql.prepare(this.text).all(...this.args)};}run(){const r=sql.prepare(this.text).run(...this.args);return {meta:{changes:Number(r.changes)}};}}
+const objects=new Map();let failUpload=false;
+globalThis.__portalEnv={RITEVENUE_MODE:'public_directory',RITEVENUE_ADMIN_EMAIL:'admin@example.test',RITEVENUE_AUTH_SECRET:'synthetic-owner-test-secret-at-least-32-characters',DB:{prepare:s=>new Statement(s),batch:statements=>{sql.exec('BEGIN');try{const r=statements.map(s=>s.run());sql.exec('COMMIT');return r;}catch(e){sql.exec('ROLLBACK');throw e;}}},BUCKET:{put:async(key,bytes)=>{if(failUpload)throw Error('Synthetic outage');objects.set(key,bytes);},get:async key=>objects.has(key)?{body:objects.get(key)}:null,delete:async key=>objects.delete(key)}};
+globalThis.fetch=()=>{throw Error('Unexpected external request');};
+const require=createRequire(resolve(root,'entry.js')),api=require('./app/api/owner/route.js'),photos=require('./app/api/owner/photos/route.js'),legacy=require('./app/api/demo/[action]/route.js'),{newWorkingVenue,submissionVenue}=require('./lib/owner-portal-domain.js'),{publicVenues}=require('./lib/public-venues.js'),{sha256}=require('./lib/auth-core.js');
+const origin='https://ritevenue.test',now=Math.floor(Date.now()/1000),cookies={};
+for(const [id,role,email] of [['alice','owner','alice@example.test'],['bob','owner','bob@example.test'],['admin','admin','admin@example.test']]){const token='synthetic-session-token-with-32-characters-'+id;cookies[id]='rv_session='+token;sql.prepare('INSERT INTO auth_sessions(id,user_id,email,role,expires_at,created_at) VALUES(?,?,?,?,?,?)').run(await sha256(token),id,email,role,now+3600,now);}
+const req=(path,body,user='alice',extra={})=>new Request(origin+path,{method:body===undefined?'GET':'POST',headers:{origin,Cookie:cookies[user]||'','Content-Type':'application/json',...extra},...(body===undefined?{}:{body:JSON.stringify(body)})});
+const post=(data,user='alice',extra={})=>api.POST(req('/api/owner',data,user,extra));
+const get=(user='alice',id)=>api.GET(req('/api/owner'+(id?'?venue='+id:''),undefined,user));
+const body=async(response,status=200)=>{assert.equal(response.status,status,await response.clone().text());return response.json();};
+const open=async(user='alice',id=crypto.randomUUID())=>body(await post({action:'open',id},user));
+const current=async(id,user='alice')=>body(await get(user,id));
+const save=async(row,data,submit=false,user='alice')=>post({action:'save',id:row.id,revision:row.revision,data,submit},user);
+const review=async(row,decision='published',user='admin')=>post({action:'review',id:row.id,revision:row.revision,decision,note:'Checked this submitted version.'},user);
+assert.equal((await get('anonymous')).status,401);assert.equal((await post({action:'open',id:crypto.randomUUID()},'alice',{origin:'https://evil.test'})).status,403);
+let a=await open(),b=await open('bob');assert.equal(a.data.capacity,null);assert.equal((await get('bob',a.id)).status,404);assert.equal((await post({action:'open',id:a.id},'bob')).status,404);
+assert.equal((await save(a,{...a.data,name:'Incomplete'})).status,200);assert.equal((await save(a,a.data)).status,409);a=await current(a.id);
+assert.equal((await save(a,a.data,true)).status,400);assert.equal((await save(a,{...a.data,images:[crypto.randomUUID()]})).status,400);
+assert.equal((await save(a,{...a.data,publication:{...a.data.publication,source:'admin'}})).status,403);
+// A header-valid fixture exercises upload validation; browser tests exercise actual decoding.
+const webp=new Uint8Array(30);webp.set(Buffer.from('RIFF'));webp.set(Buffer.from('WEBPVP8 '),8);const view=new DataView(webp.buffer);view.setUint32(4,22,true);view.setUint32(16,10,true);webp.set([0x9d,1,0x2a],23);view.setUint16(26,2,true);view.setUint16(28,2,true);
+const upload=(venue,id,user='alice',bytes=webp)=>photos.POST(new Request(origin+`/api/owner/photos?venue=${venue}&photo=${id}`,{method:'POST',headers:{origin,Cookie:cookies[user]||'','Content-Type':'image/webp'},body:bytes}));
+const image=async(id,user='alice')=>photos.GET(req('/api/owner/photos?photo='+id,undefined,user));
+const imageIds=[crypto.randomUUID(),crypto.randomUUID()];
+assert.equal((await upload(a.id,imageIds[0],'bob')).status,404);
+assert.equal((await upload(a.id,imageIds[0],'alice',new Uint8Array(360000))).status,413);
+assert.equal((await upload(a.id,imageIds[0],'alice',new Uint8Array(30))).status,400);
+failUpload=true;assert.equal((await upload(a.id,imageIds[0])).status,503);failUpload=false;
+assert.equal((await upload(a.id,imageIds[0])).status,201);assert.equal((await upload(a.id,imageIds[1])).status,201);assert.equal(objects.size,2);
+assert.equal((await upload(a.id,imageIds[0])).status,200);assert.equal(objects.size,2);assert.equal((await image(imageIds[0],'bob')).status,404);assert.equal((await image(imageIds[0],'anonymous')).status,401);assert.equal((await image(imageIds[0])).headers.get('Cache-Control'),'private, no-store');
+const racedPhoto=crypto.randomUUID();const raceUploads=await Promise.all([upload(a.id,racedPhoto),upload(a.id,racedPhoto)]);assert.ok(raceUploads.every(r=>[200,201].includes(r.status)));assert.equal(objects.size,3);assert.equal(sql.prepare('SELECT count(*) n FROM owner_images WHERE id=?').get(racedPhoto).n,1);
+const valid={...newWorkingVenue(),name:'Test owner hall',city:'Bengaluru',locality:'Rajajinagar',address:'12 Test road, Rajajinagar, Bengaluru',capacity:500,description:'A spacious venue with a covered hall and gardens for wedding celebrations.',contactName:'Alice Owner',phone:'+91 98765 43210',rentalDetails:{version:2,text:'Full day rental: INR 70,000 including GST. Tables, chairs and power included.'},images:imageIds,rightsConfirmed:true,publication:{...a.data.publication,consent:true}};
+const customMixed={...valid,pricing:{...valid.pricing,marriageRent:10000},packageAvailability:{rent:'available',marriageRent:'not_applicable',morningRent:'available',eveningRent:'available'}};
+assert.ok(Object.values(submissionVenue(a.id,customMixed).pricing).every(price=>price===0));
+assert.equal(submissionVenue(a.id,customMixed).rentalDetails.text,valid.rentalDetails.text);
+assert.equal((await save(a,{...valid,images:[imageIds[0]]},true)).status,400);
+await body(await save(a,valid,true));a=await current(a.id);assert.equal(a.status,'pending_review');assert.equal((await save(a,valid)).status,409);assert.equal((await review(a,'published','alice')).status,403);assert.equal((await publicVenues()).length,0);
+assert.equal((await upload(a.id,crypto.randomUUID())).status,409);
+await body(await review(a,'changes_requested'));a=await current(a.id);assert.equal(a.status,'changes_requested');assert.equal((await publicVenues()).length,0);
+await body(await save(a,valid,true));a=await current(a.id);const firstPublishedRevision=a.revision;
+await body(await review(a));assert.equal((await review(a)).status,409);a=await current(a.id);assert.equal(a.status,'published');assert.equal((await publicVenues())[0].name,valid.name);
+const publishedJson=sql.prepare('SELECT data_json FROM owner_drafts WHERE id=?').get(a.id).data_json;assert.equal(JSON.parse(publishedJson).contactName,undefined);assert.equal(JSON.parse(publishedJson).phone,undefined);
+const edited={...valid,name:'Updated owner hall',images:[imageIds[1],imageIds[0]]};await body(await save(a,edited));a=await current(a.id);assert.equal(a.status,'draft');assert.equal(sql.prepare('SELECT data_json FROM owner_drafts WHERE id=?').get(a.id).data_json,publishedJson);
+await body(await save(a,edited,true));a=await current(a.id);await body(await review(a,'rejected'));assert.equal(sql.prepare('SELECT data_json FROM owner_drafts WHERE id=?').get(a.id).data_json,publishedJson);a=await current(a.id);
+await body(await save(a,edited,true));a=await current(a.id);const withdrawnRevision=a.revision;await body(await post({action:'withdraw',id:a.id,revision:a.revision}));assert.equal((await review(a)).status,409);a=await current(a.id);
+await body(await save(a,edited,true));a=await current(a.id);const races=await Promise.all([review(a),review(a,'changes_requested')]);assert.deepEqual(races.map(r=>r.status).sort(),[200,409]);assert.equal((await publicVenues())[0].name,edited.name);
+assert.equal(JSON.parse(sql.prepare('SELECT data_json FROM venue_revisions WHERE venue_id=? AND revision=?').get(a.id,firstPublishedRevision).data_json).name,valid.name);assert.ok(sql.prepare('SELECT count(*) n FROM owner_review_events WHERE venue_id=?').get(a.id).n>=8);
+const oldPost=(action,payload,user='admin')=>legacy.POST(req('/api/demo/'+action,payload,user),{params:Promise.resolve({action})});
+assert.equal((await oldPost('drafts',{id:a.id})).status,409);assert.equal((await oldPost('review',{id:a.id})).status,409);assert.equal((await oldPost('public-calendar',{id:a.id,calendar:null,expectedUpdatedAt:'old'})).status,409);
+assert.equal((await oldPost('photo-metadata',{photoId:imageIds[0],venueId:a.id,storedFilename:'test-photo.webp',altText:'A test venue photograph',displayOrder:1},'alice')).status,409);
+// Assign an existing admin listing without changing its ID, images, public data or ownership projection.
+const legacyId=crypto.randomUUID(),legacyData=submissionVenue(legacyId,valid),stamp=new Date().toISOString();sql.prepare('INSERT INTO owner_drafts(id,owner_id,data_json,status,created_at,updated_at) VALUES(?,?,?,\'approved_public\',?,?)').run(legacyId,'admin',JSON.stringify({...legacyData,images:[]}),stamp,stamp);
+assert.equal((await post({action:'open',id:legacyId},'bob')).status,404);
+const invitation=await body(await post({action:'invite',id:legacyId,email:'BOB@example.test',note:'Confirmed manager by telephone.'},'admin'));
+assert.equal((await post({action:'accept',id:invitation.id},'alice')).status,409);assert.equal((await get('bob',legacyId)).status,404);
+assert.ok((await body(await get('bob'))).invites.some(i=>i.id===invitation.id));await body(await post({action:'accept',id:invitation.id},'bob'));assert.equal((await current(legacyId,'bob')).id,legacyId);assert.equal((await post({action:'accept',id:invitation.id},'bob')).status,409);assert.equal(sql.prepare('SELECT owner_id FROM owner_drafts WHERE id=?').get(legacyId).owner_id,'admin');
+const expired=await body(await post({action:'invite',id:legacyId,email:'alice@example.test',note:'Confirmed manager by telephone.'},'admin'));sql.prepare('UPDATE venue_owner_invites SET expires_at=0 WHERE id=?').run(expired.id);assert.equal((await post({action:'accept',id:expired.id},'alice')).status,409);
+a=await current(a.id);assert.equal((await post({action:'unpublish',id:a.id,revision:a.revision},'alice')).status,403);await body(await post({action:'unpublish',id:a.id,revision:a.revision},'admin'));assert.ok(!(await publicVenues()).some(v=>v.slug==='owner-'+a.id));
+a=await current(a.id);await body(await save(a,edited,true));a=await current(a.id);await body(await review(a));a=await current(a.id);
+assert.equal((await post({action:'withdraw_publication',id:a.id,revision:a.revision},'bob')).status,404);
+await body(await post({action:'withdraw_publication',id:a.id,revision:a.revision}));assert.equal((await current(a.id)).data.publication.consent,false);assert.ok(!(await publicVenues()).some(v=>v.slug==='owner-'+a.id));
+assert.equal(sql.prepare('SELECT count(*) n FROM demo_bookings').get().n,0);assert.equal(sql.prepare('SELECT count(*) n FROM demo_slots').get().n,0);
+// Standard time-only rentals survive autosave, reopening, review and publication.
+a=await current(a.id);
+const timeOnly={...valid,rentalDetails:null,pricing:{...valid.pricing,rent:7500000},packageAvailability:{rent:'price_on_request',marriageRent:'not_applicable',morningRent:'price_on_request',eveningRent:'price_on_request'},packageTimings:{...valid.packageTimings,morningRent:{start:'10:00',end:'16:00',nextDay:false},eveningRent:{start:'17:00',end:'23:00',nextDay:false}}};
+await body(await save(a,timeOnly));a=await current(a.id);assert.equal(a.data.pricing.rent,null);assert.deepEqual(a.data.packageTimings,timeOnly.packageTimings);
+await body(await save(a,a.data,true));a=await current(a.id);await body(await review(a));a=await current(a.id);
+const timeOnlyPublic=(await publicVenues()).find(v=>v.slug==='owner-'+a.id);assert.equal(timeOnlyPublic.pricing.rent,null);assert.equal(timeOnlyPublic.packageAvailability.rent,'price_on_request');assert.equal(timeOnlyPublic.packageTimings.morningRent.start,'10:00');
+const disclosed={...a.data,packageAvailability:{...a.data.packageAvailability,rent:'available'}};
+assert.equal((await save(a,disclosed,true)).status,400,'Switching back to a priced package requires entering a price');
+await body(await save(a,{...disclosed,pricing:{...disclosed.pricing,rent:7000000}},true));
+assert.equal((await publicVenues()).find(v=>v.slug==='owner-'+a.id).pricing.rent,null,'Unreviewed rental changes must not replace the live snapshot');
+console.log('Passed owner time-only rentals: autosave/reopen, null price persistence, review, public timings and priced-mode validation.');
+console.log('Passed owner portal: incomplete drafts, real sessions/CSRF, account/photo isolation, bounded retry-safe uploads, stale edits, immutable submissions, review/withdraw races, preserved live snapshots, cover order, admin-only publishing/unpublishing, legacy bypass guards, targeted expiring invitations and no booking side effects.');

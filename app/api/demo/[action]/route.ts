@@ -58,7 +58,7 @@ export async function POST(request:Request,{params}:{params:Promise<{action:stri
   let body:unknown;try{body=await readBody(request,formFlow);if(formFlow){const f=body as Record<string,string>;body=action==='hold'?{venueSlug:f.venueSlug,date:f.date,guests:Number(f.guests),packageId:f.packageId,extraHours:Number(f.extraHours||0),addons:f.addons?f.addons.split(','):[]}:action==='confirm'?{holdId:f.holdId,acknowledgeDemo:f.acknowledgeDemo==='yes'}:{holdId:f.holdId};}}catch{return reply({error:'Invalid or oversized JSON request'},400);}
     if(action==='photo-metadata'){
      const parsed=z.object({photoId:z.string().uuid(),venueId:z.string().uuid(),storedFilename:z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*\.webp$/).max(180),altText:z.string().trim().min(10).max(200),displayOrder:z.number().int().min(1).max(15)}).strict().safeParse(body);if(!parsed.success)return reply({error:'Use a lowercase WebP filename, descriptive alt text and a valid display order.'},400);
-     const photo=parsed.data;const owned=await database.prepare('SELECT id FROM owner_images WHERE id=? AND owner_id=?').bind(photo.photoId,user.userId).first();if(!owned)return reply({error:'Photo not found.'},404);
+     const photo=parsed.data;if(await database.prepare('SELECT id FROM owner_portal_photos WHERE id=?').bind(photo.photoId).first()||await database.prepare('SELECT id FROM venue_workspaces WHERE id=?').bind(photo.venueId).first())return reply({error:'Manage these photos in the owner workspace.'},409);const owned=await database.prepare('SELECT id FROM owner_images WHERE id=? AND owner_id=?').bind(photo.photoId,user.userId).first();if(!owned)return reply({error:'Photo not found.'},404);
      await database.prepare('INSERT INTO venue_photo (id,venue_id,stored_filename,alt_text,display_order) VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET venue_id=excluded.venue_id,stored_filename=excluded.stored_filename,alt_text=excluded.alt_text,display_order=excluded.display_order').bind(photo.photoId,photo.venueId,photo.storedFilename,photo.altText,photo.displayOrder).run();return reply({saved:true});
     }
   if(action==='hold'){
@@ -76,7 +76,7 @@ export async function POST(request:Request,{params}:{params:Promise<{action:stri
   if(action==='public-calendar'){
    const parsed=z.object({id:z.string().uuid(),calendar:publicationSchema.shape.calendar,expectedUpdatedAt:z.string().min(1).max(64)}).strict().safeParse(body);
    if(!parsed.success)return reply({error:'Check the calendar dates and unavailable dates.'},400);
-   const d=parsed.data;const current=await database.prepare("SELECT data_json FROM owner_drafts WHERE id=? AND owner_id=? AND status='approved_public' AND updated_at=?").bind(d.id,user.userId,d.expectedUpdatedAt).first<{data_json:string}>();
+   const d=parsed.data;if(await database.prepare('SELECT id FROM venue_workspaces WHERE id=?').bind(d.id).first())return reply({error:'Use the owner workspace to submit calendar changes for review.'},409);const current=await database.prepare("SELECT data_json FROM owner_drafts WHERE id=? AND owner_id=? AND status='approved_public' AND updated_at=?").bind(d.id,user.userId,d.expectedUpdatedAt).first<{data_json:string}>();
    if(!current)return reply({error:'This listing changed, is not public, or belongs to another account. Refresh and reopen it.'},409);
    const data=draftSchema.parse(JSON.parse(current.data_json));if(data.publication.source==='admin'&&d.calendar!==null)return reply({error:'Admin-direct availability remains unconfirmed until the venue verifies it.'},400);data.publication.calendar=d.calendar;data.publication.calendarUpdatedAt=d.calendar?new Date().toISOString():null;
    const result=await database.prepare("UPDATE owner_drafts SET data_json=?,updated_at=? WHERE id=? AND owner_id=? AND status='approved_public' AND updated_at=? AND data_json=? RETURNING id").bind(JSON.stringify(data),new Date().toISOString(),d.id,user.userId,d.expectedUpdatedAt,current.data_json).first();
@@ -87,6 +87,8 @@ export async function POST(request:Request,{params}:{params:Promise<{action:stri
    await database.prepare('INSERT INTO demo_venue_settings (venue_slug,pricing_json,updated_at) VALUES (?,?,?) ON CONFLICT(venue_slug) DO UPDATE SET pricing_json=excluded.pricing_json,updated_at=excluded.updated_at').bind(parsed.data.venueSlug,JSON.stringify(parsed.data.pricing),new Date().toISOString()).run();return reply({saved:true});
   }
   if(action==='drafts'){
+   const id=body&&typeof body==='object'&&'id' in body?String(body.id):'';
+   if(await database.prepare('SELECT id FROM venue_workspaces WHERE id=?').bind(id).first())return reply({error:'Use the owner workspace to edit this listing. Its published version is protected.'},409);
    const parsed=draftSchema.safeParse(body);if(!parsed.success)return reply({error:parsed.error.issues[0].message},400);const d=parsed.data;d.publication.calendarUpdatedAt=d.publication.calendar?new Date().toISOString():null;
    if(d.publication.source==='admin'&&!isAdmin(user))return reply({error:'Only an administrator may prepare an admin-direct listing.'},403);
    for(const id of d.images){const image=await database.prepare('SELECT id FROM owner_images WHERE id=? AND owner_id=?').bind(id,user.userId).first();if(!image)return reply({error:'Choose images uploaded by your account.'},400);}
@@ -95,6 +97,8 @@ export async function POST(request:Request,{params}:{params:Promise<{action:stri
    const stamp=new Date().toISOString();const saved=await database.prepare("INSERT INTO owner_drafts (id,owner_id,data_json,status,review_note,created_at,updated_at) VALUES (?,?,?,?,'',?,?) ON CONFLICT(id) DO UPDATE SET data_json=excluded.data_json,status=excluded.status,review_note='',updated_at=excluded.updated_at WHERE owner_drafts.owner_id=excluded.owner_id RETURNING id").bind(d.id,user.userId,JSON.stringify(d),d.submit?'pending_review':'draft',stamp,stamp).first();if(!saved)throw new Error('FORBIDDEN');return reply({id:d.id,status:d.submit?'pending_review':'draft'});
   }
   if(action==='review'){
+   const id=body&&typeof body==='object'&&'id' in body?String(body.id):'';
+   if(await database.prepare('SELECT id FROM venue_workspaces WHERE id=?').bind(id).first())return reply({error:'Review this submission in Owner submissions & access.'},409);
    if(!isAdmin(user))throw new Error('FORBIDDEN');const parsed=z.object({id:z.string().uuid(),status:z.enum(['approved_for_demo','approved_public','changes_requested','rejected']),note:z.string().trim().min(5).max(1000),expectedUpdatedAt:z.string().min(1).max(64)}).strict().safeParse(body);if(!parsed.success)return reply({error:'Add a review note (5-1000 characters).'},400);
    let reviewedPayload:string|null=null;
    if(parsed.data.status==='approved_public'){

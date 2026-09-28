@@ -17,7 +17,7 @@ export async function venueCatalog(){
  ]);
  for(const row of settings.results)if(pricing[row.venue_slug])pricing[row.venue_slug]=pricingSchema.parse(JSON.parse(row.pricing_json));
  const submitted=approved.results.map(row=>ownerListing(row.id,row.data_json)).filter(item=>item.bookable);
- for(const item of submitted)pricing[item.venue.slug]=item.pricing;
+ for(const item of submitted)if(item.pricing)pricing[item.venue.slug]=item.pricing;
  return {venues:[...submitted.map(item=>item.venue),...venues],pricing};
 }
 export async function catalogPricing(){return (await venueCatalog()).pricing;}
@@ -27,6 +27,6 @@ export async function venuePricing(slug:string){
  if(!/^owner-[0-9a-f-]{36}$/.test(slug))throw new Error('NOT_FOUND');
  const row=await db().prepare("SELECT id,data_json,updated_at FROM owner_drafts WHERE id=? AND status='approved_for_demo'").bind(slug.slice(6)).first<{id:string;data_json:string;updated_at:string}>();
  if(!row)throw new Error('NOT_FOUND');
- const listing=ownerListing(row.id,row.data_json);if(!listing.bookable)throw new Error('NOT_FOUND');
- return {...listing,approval:{id:row.id,dataJson:row.data_json}};
+ const listing=ownerListing(row.id,row.data_json);if(!listing.bookable||!listing.pricing)throw new Error('NOT_FOUND');
+ return {...listing,pricing:listing.pricing,approval:{id:row.id,dataJson:row.data_json}};
 }

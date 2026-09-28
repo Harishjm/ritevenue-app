@@ -5,7 +5,7 @@ import {createRequire} from 'node:module';
 import {DatabaseSync} from 'node:sqlite';
 import assert from 'node:assert/strict';
 const root=resolve('.sites-runtime/prototype-tests');mkdirSync(root,{recursive:true});writeFileSync(resolve(root,'package.json'),'{"type":"commonjs"}');
-for(const file of ['lib/venue-capacity.ts','lib/venue-offers.ts','lib/venue-photo.ts','lib/slugify.ts','lib/venue-url.ts','lib/guides.ts','app/sitemap.ts','lib/venue-image.ts','lib/intake-photo-server.ts','lib/venue-intake.ts','app/api/venue-applications/route.ts','lib/launch.ts','lib/publication.ts','lib/public-venues.ts','app/api/public/[action]/route.ts','lib/venues.ts','lib/catering.ts','lib/catering-server.ts','app/api/catering/[action]/route.ts','lib/booking.ts','lib/owner-venue.ts','lib/db.ts','lib/demo-server.ts','lib/calendar.ts','app/api/demo/[action]/route.ts']){
+for(const file of ['lib/standard-rentals.ts','lib/venue-capacity.ts','lib/venue-offers.ts','lib/venue-photo.ts','lib/slugify.ts','lib/venue-url.ts','lib/guides.ts','app/sitemap.ts','lib/venue-image.ts','lib/intake-photo-server.ts','lib/venue-intake.ts','app/api/venue-applications/route.ts','lib/launch.ts','lib/publication.ts','lib/public-venues.ts','app/api/public/[action]/route.ts','lib/venues.ts','lib/catering.ts','lib/catering-server.ts','app/api/catering/[action]/route.ts','lib/booking.ts','lib/owner-venue.ts','lib/db.ts','lib/demo-server.ts','lib/calendar.ts','app/api/demo/[action]/route.ts']){
  let source=readFileSync(file,'utf8').replace("import {env} from 'cloudflare:workers';",'const env=globalThis.__testEnv;');
  if(file==='lib/demo-server.ts')source=source.replace("import {getAuthenticatedUser,isAdminUser,type AuthUser} from './auth';",'type AuthUser=any;async function getAuthenticatedUser(){return globalThis.__testUser;}function isAdminUser(user){return user?.email===globalThis.__testEnv.RITEVENUE_ADMIN_EMAIL;}');
  const dest=resolve(root,file.replace(/\.ts$/,'.js'));mkdirSync(dirname(dest),{recursive:true});
@@ -289,6 +289,10 @@ privatePackages.packageAvailability={rent:'available',marriageRent:'not_applicab
 sql.prepare('UPDATE owner_drafts SET data_json=? WHERE id=?').run(JSON.stringify(privatePackages),id);
 assert.equal((await post('hold',{...selection,venueSlug:ownerVenue.slug,date:domain.lastBookableDate()})).status,409,'A package marked not applicable cannot be held');
 assert.equal((await get('calendar','?venue='+ownerVenue.slug+'&month='+indiaToday().slice(0,7)+'&package=half-evening')).status,409,'A package marked not available has no bookable calendar');
+const unquotedPrivate={...privatePackages,pricing:{...privatePackages.pricing,rent:null},packageAvailability:{...privatePackages.packageAvailability,rent:'price_on_request'}};
+sql.prepare('UPDATE owner_drafts SET data_json=? WHERE id=?').run(JSON.stringify(unquotedPrivate),id);
+assert.equal((await post('hold',{...selection,venueSlug:ownerVenue.slug,packageId:'full-day',date:domain.lastBookableDate()})).status,404,'Unquoted listings must not reach the fixed-price demo quote engine');
+sql.prepare('UPDATE owner_drafts SET data_json=? WHERE id=?').run(JSON.stringify(privatePackages),id);
 console.log('Passed optional catering: owned active holds, add/remove, stale edits, venue/date/guest matching, overnight meal dates, confirmation snapshot, unchanged venue advance, expired/confirmed holds and venue-only checkout.');
 console.log('Passed catering: policy compatibility, supplier dates/localities/capacity, minimum billing/spend, optional charges, integer-paise rounding, tamper/origin validation, private contacts/photos, draft ownership, stale edit/review rejection, approval visibility and edit withdrawal. No reservation or advance created.');
 console.log('Passed: 20 venues, pricing integrity, input validation, competing holds, expiry/reclaim, idempotent confirmation, immutable quotes, cross-account isolation, admin restrictions, private uploads, 5% advance, four package prices, half-day bookings, extra-hour overlap prevention, legacy quote preservation, approval-to-catalog, owner venue booking, edit withdrawal, stale review protection and draft moderation. No external calls made.');
@@ -450,6 +454,15 @@ const limitedDraft={...photoDraft,images:[photoRecord.id,directPhoto],packageAva
 assert.equal((await post('drafts',limitedDraft)).status,200);
 assert.equal((await post('review',{id:photoDraftId,status:'approved_public',note:'Package options checked with the owner.',expectedUpdatedAt:sql.prepare('SELECT updated_at FROM owner_drafts WHERE id=?').get(photoDraftId).updated_at})).status,200);
 const limitedPublic=(await (await pget('catalog')).json()).venues.find(v=>v.slug==='owner-'+photoDraftId);assert.deepEqual(limitedPublic.packageAvailability,limitedPackages);assert.equal(limitedPublic.pricing.rent,null);assert.equal(limitedPublic.pricing.marriageRent,null);assert.equal(limitedPublic.pricing.morningRent,photoDraft.pricing.morningRent);
+const standardRentals=require('./lib/standard-rentals.js');
+const unquotedDraft={...limitedDraft,packageAvailability:{rent:'price_on_request',marriageRent:'not_applicable',morningRent:'price_on_request',eveningRent:'available'},packageTimings:{...standardRentals.defaultPackageTimings,morningRent:{start:'10:00',end:'16:00',nextDay:false},eveningRent:{start:'17:00',end:'23:00',nextDay:false}}};
+assert.equal((await post('drafts',unquotedDraft)).status,200);
+const unquotedStored=JSON.parse(sql.prepare('SELECT data_json FROM owner_drafts WHERE id=?').get(photoDraftId).data_json);
+assert.equal(unquotedStored.pricing.rent,null,'A stale amount must be cleared when the status is price on request');assert.equal(unquotedStored.pricing.morningRent,null);
+assert.equal((await post('review',{id:photoDraftId,status:'approved_public',note:'Timings provided; request a rental quote.',expectedUpdatedAt:sql.prepare('SELECT updated_at FROM owner_drafts WHERE id=?').get(photoDraftId).updated_at})).status,200);
+const unquotedPublic=(await (await pget('catalog')).json()).venues.find(v=>v.slug==='owner-'+photoDraftId);
+assert.equal(unquotedPublic.pricing.rent,null);assert.equal(unquotedPublic.pricing.morningRent,null);assert.equal(unquotedPublic.pricing.eveningRent,photoDraft.pricing.eveningRent);
+assert.equal(unquotedPublic.packageAvailability.rent,'price_on_request');assert.deepEqual(unquotedPublic.packageTimings,unquotedDraft.packageTimings);
 assert.equal((await post('drafts',{...photoDraft,rightsConfirmed:true,submit:false})).status,200);assert.equal((await pget('image','?id='+photoRecord.id)).status,404);
 // Storage failures leave a known, private reservation, resumed with the original key.
 const originalPut=globalThis.__testEnv.BUCKET.put;let shouldFail=true;
@@ -468,6 +481,18 @@ console.log('Passed intake photos: WebP size/dimensions/metadata rejection, cons
 
 // Flexible offers are discovery-only and do not inherit fabricated legacy prices.
 const offersDomain=require('./lib/venue-offers.js'),ownerDomain=require('./lib/owner-venue.js');
+const allUnquoted={...unquotedDraft,pricing:{...photoDraft.pricing,rent:null,marriageRent:null,morningRent:null,eveningRent:null},packageAvailability:Object.fromEntries(standardRentals.rentalKeys.map(key=>[key,'price_on_request']))};
+assert.equal(ownerDomain.draftSchema.safeParse(allUnquoted).success,true,'All packages can have undisclosed prices');
+assert.equal(ownerDomain.ownerListing(allUnquoted.id,JSON.stringify(allUnquoted)).bookable,false);
+for(const rent of [null,0,9999,-1,100000001])assert.equal(ownerDomain.draftSchema.safeParse({...allUnquoted,pricing:{...allUnquoted.pricing,rent},packageAvailability:{...allUnquoted.packageAvailability,rent:'available'}}).success,false);
+const knownRental={...allUnquoted,pricing:photoDraft.pricing,packageAvailability:standardRentals.packageAvailabilitySchema.parse({})};
+assert.equal(ownerDomain.draftSchema.safeParse(knownRental).success,true);
+assert.equal(ownerDomain.ownerListing(knownRental.id,JSON.stringify(knownRental)).bookable,false,'Custom slot times must not silently use fixed prototype booking windows');
+assert.deepEqual(ownerDomain.draftSchema.parse({...knownRental,packageTimings:undefined}).packageTimings,standardRentals.defaultPackageTimings,'Old listings retain their established timings');
+for(const timing of [{start:'10:00',end:'10:00',nextDay:false},{start:'17:00',end:'10:00',nextDay:false},{start:'10:00',end:'17:00',nextDay:true},{start:'25:00',end:'23:00',nextDay:false}])assert.equal(ownerDomain.draftSchema.safeParse({...allUnquoted,packageTimings:{...allUnquoted.packageTimings,rent:timing}}).success,false);
+assert.equal(ownerDomain.draftSchema.safeParse({...allUnquoted,packageTimings:{...allUnquoted.packageTimings,marriageRent:{start:'15:00',end:'15:00',nextDay:true}}}).success,true);
+assert.equal(ownerDomain.draftSchema.safeParse({...allUnquoted,packageAvailability:{...allUnquoted.packageAvailability,rent:'free'}}).success,false);
+console.log('Passed standard packages: price-on-request save/review/public read, null prices, mixed and all-unquoted slots, custom times, overnight validation, old listing defaults and quote-engine isolation.');
 const flexible=offersDomain.newRentalDetails();
 flexible.offers[0]={...flexible.offers[0],name:'24-hour marriage',amount:50000000,tax:{status:'included',rate:null},start:'15:00',end:'15:00',endDay:1};
 assert.equal(offersDomain.rentalDetailsSchema.safeParse(flexible).success,true);
@@ -508,13 +533,21 @@ console.log('Passed flexible venue offers: custom overnight times, inclusive/ext
 // Custom prose is an explicit public listing field for both publication routes.
 const customText='The Windflower Resorts & Spa, Mysore!!\n\nPavillion Lawn, Hall & Grove: INR. 525000+18% (Without Food)\n\nVeg: INR. 850+18% Per Person\nPlantain Leaf: INR. 950+18%\nNon-Veg: INR. 1400+18%\n\nLawn + Hall: INR.450000+18% & Cleaning: INR.25000+ Menu Charges\nGrove + Hall: INR.200000+18% Menu Charges.\nCapacity: 2500';
 const customDetails={version:2,text:customText};
+// A custom-mode form can retain a placeholder for an unavailable standard package.
+// It must not fail the standard-price union before custom details replace those prices.
+const mixedCustomPricing={rent:0,marriageRent:10000,morningRent:0,eveningRent:0,extraHour:0,ac:0,generator:0,parking:0,cleaning:0};
+const customWithHiddenPrices={...flexDraft,rentalDetails:customDetails,pricing:mixedCustomPricing,packageAvailability:{rent:'available',marriageRent:'not_applicable',morningRent:'available',eveningRent:'available'}};
+assert.equal(ownerDomain.draftSchema.safeParse(customWithHiddenPrices).success,true);
+assert.ok(Object.values(ownerDomain.draftSchema.parse(customWithHiddenPrices).pricing).every(price=>price===0));
+assert.deepEqual(customWithHiddenPrices.pricing,mixedCustomPricing,'Validation must not mutate the form payload');
+assert.equal(ownerDomain.draftSchema.safeParse({...customWithHiddenPrices,rentalDetails:null}).success,false,'Standard packages still require valid standard pricing');
 assert.equal(offersDomain.rentalDetailsSchema.safeParse(customDetails).success,true);
 for(const invalid of [{version:2,text:'  \n '},{version:2,text:'x'.repeat(5001)},{version:2,text:42},{version:3,text:'Invalid version'}])assert.equal(offersDomain.rentalDetailsSchema.safeParse(invalid).success,false);
 const convertedText=offersDomain.rentalDetailsText(resort);
 for(const value of ['Lawn + Hall','Grove + Hall','INR 4,50,000','+ 18% GST','Cleaning','INR 25,000','Applies to: Lawn + Hall','INR 850','All offers'])assert.ok(convertedText.includes(value),value);
 assert.deepEqual(offersDomain.rentalDetailsSchema.parse(resort),resort,'Reading existing structured details does not change them');
 for(const source of ['owner','admin']){
- const customId=crypto.randomUUID(),customDraft={...flexDraft,id:customId,rentalDetails:customDetails,cateringPolicy:{mode:'in_house',notes:'Veg menu: INR 850 + 18% GST per plate\nNon-veg menu: INR 1400 + 18% GST per plate'},publication:source==='admin'?adminRights:flexDraft.publication,submit:false};
+ const customId=crypto.randomUUID(),customDraft={...customWithHiddenPrices,id:customId,rentalDetails:customDetails,cateringPolicy:{mode:'in_house',notes:'Veg menu: INR 850 + 18% GST per plate\nNon-veg menu: INR 1400 + 18% GST per plate'},publication:source==='admin'?adminRights:flexDraft.publication,submit:false};
  assert.equal((await post('drafts',customDraft)).status,200);
  assert.ok(!(await (await pget('catalog')).json()).venues.some(v=>v.slug==='owner-'+customId),'Draft custom text stays private');
  const saved=JSON.parse(sql.prepare('SELECT data_json FROM owner_drafts WHERE id=?').get(customId).data_json);

@@ -4,15 +4,16 @@ import {readFileSync,readdirSync} from 'node:fs';
 import {resolve} from 'node:path';
 import assert from 'node:assert/strict';
 import {generateKeyPair,exportJWK,SignJWT} from 'jose';
+import {workerFixtureModules} from './worker-fixture-modules.mjs';
 const require=createRequire(import.meta.url);
 const wranglerRequire=createRequire(require.resolve('wrangler/package.json'));
 const {Miniflare,Response}=wranglerRequire('miniflare');
 const origin='https://ritevenue.test';
 const clientId='worker-test.apps.googleusercontent.com';
 const pair=await generateKeyPair('RS256'),publicKey=await exportJWK(pair.publicKey);
-let authorization,exchangeCalls=0,keyCalls=0,redirectExchange=false;
+let authorization,exchangeCalls=0,keyCalls=0,redirectExchange=false,ownerSignIn=false;
 const worker=new Miniflare({
- modules:[{type:'ESModule',path:resolve('dist/server/index.js')},...readdirSync('dist/server',{recursive:true}).filter(file=>file.endsWith('.js')&&file!=='index.js').map(file=>({type:'ESModule',path:resolve('dist/server',file)}))],
+ modules:workerFixtureModules(),
  compatibilityDate:'2026-05-15',compatibilityFlags:['nodejs_compat'],
  d1Databases:{DB:'auth-worker-test'},r2Buckets:['BUCKET'],
  bindings:{RITEVENUE_MODE:'public_directory',RITEVENUE_DEPLOYMENT:'standalone_cloudflare_staging',RITEVENUE_ADMIN_EMAIL:'admin@example.test',RITEVENUE_AUTH_SECRET:'synthetic-worker-test-secret-over-32-characters',RITEVENUE_GOOGLE_CLIENT_ID:clientId,RITEVENUE_GOOGLE_CLIENT_SECRET:'synthetic-google-client-secret',RITEVENUE_GOOGLE_REDIRECT_URI:origin+'/api/auth/google-callback'},
@@ -26,7 +27,7 @@ const worker=new Miniflare({
    const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(params.get('code_verifier')));
    assert.equal(Buffer.from(digest).toString('base64url'),authorization.searchParams.get('code_challenge'));
    const now=Math.floor(Date.now()/1000);
-   const token=await new SignJWT({sub:'worker-test-admin',email:'admin@example.test',email_verified:true,nonce:authorization.searchParams.get('nonce'),iss:'https://accounts.google.com',aud:clientId,iat:now,exp:now+300}).setProtectedHeader({alg:'RS256',kid:'worker-test-key'}).sign(pair.privateKey);
+   const token=await new SignJWT({sub:ownerSignIn?'worker-test-owner':'worker-test-admin',email:ownerSignIn?'owner@example.test':'admin@example.test',email_verified:true,nonce:authorization.searchParams.get('nonce'),iss:'https://accounts.google.com',aud:clientId,iat:now,exp:now+300}).setProtectedHeader({alg:'RS256',kid:'worker-test-key'}).sign(pair.privateKey);
    return Response.json({id_token:token});
   }
   if(request.url==='https://www.googleapis.com/oauth2/v3/certs'){
@@ -81,6 +82,13 @@ try{
  assert.ok(html.includes('Flexible fixture venue'));
  const homeHtml=await (await worker.dispatchFetch(origin+'/')).text();
  assert.ok(homeHtml.includes('href="'+listing.publicPath+'"'),'Directory cards must link directly to the canonical page');
+ const standardPublished={...published,rentalDetails:null,publication:{...published.publication,source:'owner'},pricing:{...published.pricing,rent:null,morningRent:null,eveningRent:7000000},packageAvailability:{rent:'price_on_request',marriageRent:'not_applicable',morningRent:'price_on_request',eveningRent:'available'},packageTimings:{...savedDraft.packageTimings,morningRent:{start:'10:00',end:'16:00',nextDay:false},eveningRent:{start:'17:00',end:'23:00',nextDay:false}}};
+ await db.prepare('UPDATE owner_drafts SET data_json=? WHERE id=?').bind(JSON.stringify(standardPublished),draftId).run();
+ const standardPage=await worker.dispatchFetch(origin+listing.publicPath,{redirect:'manual'});assert.equal(standardPage.status,200);
+ const standardHtml=await standardPage.text();assert.match(standardHtml,/Price on request/);assert.match(standardHtml,/10 AM to 4 PM/);assert.match(standardHtml,/5 PM to 11 PM/);assert.match(standardHtml,/70,000/);
+ const standardHome=await (await worker.dispatchFetch(origin+'/')).text();assert.match(standardHome,/Price on request/);assert.ok(!standardHome.includes('full-day base rent'),'A null rental must not be advertised as a zero full-day price');
+ await db.prepare('UPDATE owner_drafts SET data_json=? WHERE id=?').bind(JSON.stringify(published),draftId).run();
+ console.log('Passed built Worker standard rentals: price-on-request venue/card rendering, actual slot timings and mixed quoted/unquoted prices.');
  const updated={...published,name:'Renamed fixture resort'};
  await db.prepare('UPDATE owner_drafts SET data_json=? WHERE id=?').bind(JSON.stringify(updated),draftId).run();
  const newListing=(await (await worker.dispatchFetch(origin+'/api/public/catalog')).json()).venues.find(venue=>venue.slug===listing.slug);
@@ -102,5 +110,26 @@ try{
  assert.equal(redirectCallback.headers.get('location'),'/admin/sign-in?error=google');
  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM auth_sessions').first()).n,1);
  assert.equal(exchangeCalls,2);
+ // The same built callback supports owners without weakening administrator authorization.
+ redirectExchange=false;ownerSignIn=true;
+ const ownerStart=await worker.dispatchFetch(origin+'/api/auth/google-start',{method:'POST',headers:{origin,'content-type':'application/x-www-form-urlencoded'},body:'audience=owner&return_to=%2Fowner',redirect:'manual'});
+ authorization=new URL(ownerStart.headers.get('location'));
+ const ownerCallback=await worker.dispatchFetch(origin+'/api/auth/google-callback?'+new URLSearchParams({state:authorization.searchParams.get('state'),code:'synthetic-owner-code'}),{headers:{cookie:ownerStart.headers.get('set-cookie').split(';')[0]},redirect:'manual'});
+ assert.equal(ownerCallback.headers.get('location'),'/owner');
+ const ownerSession=ownerCallback.headers.getSetCookie().find(c=>c.startsWith('rv_session=')).split(';')[0];
+ // dispatchFetch rewrites URL but otherwise uses its local transport Host header.
+ const ownerHeaders={origin,host:new URL(origin).host,cookie:ownerSession,'content-type':'application/json'};
+ assert.equal((await (await worker.dispatchFetch(origin+'/api/auth/session',{headers:ownerHeaders})).json()).user.role,'owner');
+ const ownerIdNew=crypto.randomUUID();
+ const portalOpen=await worker.dispatchFetch(origin+'/api/owner',{method:'POST',headers:ownerHeaders,body:JSON.stringify({action:'open',id:ownerIdNew})});assert.equal(portalOpen.status,200,await portalOpen.clone().text());
+ const portalRow=await portalOpen.json();assert.equal(portalRow.data.capacity,null);
+ const portalSave=await worker.dispatchFetch(origin+'/api/owner',{method:'POST',headers:ownerHeaders,body:JSON.stringify({action:'save',id:ownerIdNew,revision:portalRow.revision,data:{...portalRow.data,name:'Owner incomplete draft'},submit:false})});assert.equal(portalSave.status,200,await portalSave.clone().text());
+ const portalList=await worker.dispatchFetch(origin+'/api/owner',{headers:ownerHeaders});assert.equal((await portalList.json()).venues[0].data.name,'Owner incomplete draft');
+ assert.equal((await worker.dispatchFetch(origin+'/api/owner')).status,401);
+ assert.equal((await worker.dispatchFetch(origin+'/api/wedding-enquiries',{headers:ownerHeaders})).status,403);
+ const ownerHtml=await worker.dispatchFetch(origin+'/owner',{headers:ownerHeaders,redirect:'manual'});assert.equal(ownerHtml.status,200,ownerHtml.headers.get('location'));assert.ok((await ownerHtml.text()).includes('Your venues, all in one place.'));
+ const ownerEntry=await worker.dispatchFetch(origin+'/list-your-venue',{headers:{host:new URL(origin).host},redirect:'manual'});assert.equal(ownerEntry.status,200);assert.ok((await ownerEntry.text()).includes('Save and continue with Google'));
+ const alternateEntry=await worker.dispatchFetch('https://alternate.test/list-your-venue',{headers:{host:'alternate.test'},redirect:'manual'});assert.equal(alternateEntry.status,307);assert.equal(alternateEntry.headers.get('location'),origin+'/list-your-venue');
+ console.log('Passed built Worker owner Google sign-in, real D1 workspace creation/autosave, account isolation, HTML entry routes and pre-form canonical redirect.');
  console.log('Passed built Worker Google sign-in, D1 flow consumption, token exchange, remote JWKS verification, session creation, replay rejection and flexible venue draft persistence.');
 }finally{await worker.dispose();}

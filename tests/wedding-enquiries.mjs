@@ -6,7 +6,7 @@ import {DatabaseSync} from 'node:sqlite';
 import assert from 'node:assert/strict';
 
 const root=resolve('.sites-runtime/wedding-enquiry-tests');mkdirSync(root,{recursive:true});writeFileSync(resolve(root,'package.json'),'{"type":"commonjs"}');
-for(const file of ['lib/venue-capacity.ts','lib/venue-offers.ts','lib/wedding-enquiries.ts','lib/venue-intake.ts','lib/db.ts','lib/auth-core.ts','lib/auth.ts','lib/demo-server.ts','lib/venues.ts','lib/booking.ts','lib/publication.ts','lib/catering.ts','lib/owner-venue.ts','app/api/wedding-enquiries/route.ts']){
+for(const file of ['lib/standard-rentals.ts','lib/venue-capacity.ts','lib/venue-offers.ts','lib/wedding-enquiries.ts','lib/venue-intake.ts','lib/db.ts','lib/auth-core.ts','lib/auth.ts','lib/demo-server.ts','lib/venues.ts','lib/booking.ts','lib/publication.ts','lib/catering.ts','lib/owner-venue.ts','app/api/wedding-enquiries/route.ts']){
  let source=readFileSync(file,'utf8').replace("import {env} from 'cloudflare:workers';",'const env=globalThis.__weddingEnv;').replace("import {headers} from 'next/headers';",'async function headers(){return new Headers();}').replace("import {redirect} from 'next/navigation';",'function redirect(path){throw new Error("REDIRECT:"+path);}');
  const dest=resolve(root,file.replace(/\.ts$/,'.js'));mkdirSync(dirname(dest),{recursive:true});
  source=source.replace(/(['"])@\//g,(_,quote)=>quote+(relative(dirname(dest),root)||'.')+'/');

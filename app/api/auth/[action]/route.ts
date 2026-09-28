@@ -19,7 +19,8 @@ export async function POST(request:Request,{params}:{params:Promise<{action:stri
    if(!request.headers.get('content-type')?.startsWith('application/x-www-form-urlencoded'))throw new AuthError(400,'Invalid sign-in form.');
    const reader=request.body?.getReader();let body='';
    if(reader){let size=0;const decoder=new TextDecoder();for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>4096){await reader.cancel();throw new AuthError(413,'Invalid sign-in form.');}body+=decoder.decode(value,{stream:true});}body+=decoder.decode();}
-   return await startGoogleSignIn(request,new URLSearchParams(body).get('return_to')||'/admin');
+   const form=new URLSearchParams(body),audience=form.get('audience')==='owner'?'owner':'admin';
+   return await startGoogleSignIn(request,form.get('return_to')||(audience==='owner'?'/owner':'/admin'),audience);
   }
   // Email OTP implementation is retained for Phase 2, but has no public endpoint.
   return json({error:'Not found'},404);

@@ -35,15 +35,18 @@ import VenueDetailsMode from '@/components/venue-details-mode';
 import VenueCapacityFields from '@/components/venue-capacity-fields';
 import VenueCapacitySummary from '@/components/venue-capacity-summary';
 import {capacityLabel,type CapacityDetails} from '@/lib/venue-capacity';
-import {newCustomRentalDetails,type RentalDetails} from '@/lib/venue-offers';
+import {emptyLegacyPricing,newCustomRentalDetails,type RentalDetails} from '@/lib/venue-offers';
 import {draftSchema} from '@/lib/owner-venue';
 import {venuePublicPath} from '@/lib/venue-url';
+import {packageTimingsSchema,pricingForAvailability,type ListingPricing,type PackageTimings} from '@/lib/standard-rentals';
+import StandardRentalSummary from './standard-rental-summary';
 type Draft = {
   city: string;
   rentalDetails: RentalDetails | null;
   publication: Publication;
   cateringPolicy: CateringPolicy;
   packageAvailability: PackageAvailability;
+  packageTimings: PackageTimings;
   id: string;
   name: string;
   locality: string;
@@ -52,7 +55,7 @@ type Draft = {
   capacity: number | null;
   capacityDetails: CapacityDetails | null;
   description: string;
-  pricing: Pricing;
+  pricing: ListingPricing;
   images: string[];
   rightsConfirmed: boolean;
   submit: boolean;
@@ -63,6 +66,7 @@ const blank = (): Draft => ({
   publication: publicationSchema.parse({}),
   cateringPolicy: policySchema.parse({}),
   packageAvailability: packageAvailabilitySchema.parse({}),
+  packageTimings: packageTimingsSchema.parse({}),
   id: crypto.randomUUID(),
   name: "",
   locality: "",
@@ -82,108 +86,7 @@ const blank = (): Draft => ({
   rightsConfirmed: false,
   submit: false,
 });
-const labels: Record<keyof Pricing, string> = {
-  rent: "Full Day rental",
-  marriageRent: "24-hour Marriage rental",
-  morningRent: "Half Day Morning rental",
-  eveningRent: "Half Day Evening rental",
-  extraHour: "Extra hour rate",
-  ac: "Mandatory AC",
-  generator: "Mandatory generator",
-  parking: "Mandatory parking",
-  cleaning: "Mandatory cleaning",
-};
-function toDisplayAmount(amount: number) {
-  return amount > 0 ? amount / 100 : "";
-}
-function preserveUnavailablePrices(
-  value: Pricing,
-  availability: PackageAvailability,
-) {
-  const next = { ...value };
-  for (const key of Object.keys(availability) as (keyof PackageAvailability)[])
-    if (availability[key] !== "available" && next[key] < 10000)
-      next[key] = 10000;
-  return next;
-}
-function rentalSummary(
-  status: PackageAvailability[keyof PackageAvailability],
-  amount: number,
-) {
-  return status === "available"
-    ? money(amount / 100)
-    : status === "not_applicable"
-      ? "Not applicable"
-      : "Not available";
-}
-function PricingFields({
-  value,
-  onChange,
-  availability,
-  onAvailabilityChange,
-}: {
-  value: Pricing;
-  onChange: (p: Pricing) => void;
-  availability?: PackageAvailability;
-  onAvailabilityChange?: (next: PackageAvailability) => void;
-}) {
-  return (
-    <div className="pricing-fields">
-      {(Object.keys(labels) as (keyof Pricing)[]).map((k) => {
-        const isRental = [
-          "rent",
-          "marriageRent",
-          "morningRent",
-          "eveningRent",
-        ].includes(k);
-        const rental = isRental ? (k as keyof PackageAvailability) : null;
-        const status = rental ? availability?.[rental] : "available";
-        return (
-          <div key={k} className="stack-form">
-            <label>
-              {labels[k]} (₹)
-              {rental && availability && onAvailabilityChange && (
-                <select
-                  aria-label={`${labels[k]} availability`}
-                  value={status}
-                  onChange={(e) =>
-                    onAvailabilityChange({
-                      ...availability,
-                      [rental]: e.target
-                        .value as PackageAvailability[typeof rental],
-                    })
-                  }
-                >
-                  <option value="available">Available — enter rental</option>
-                  <option value="not_applicable">
-                    Not applicable — package not offered
-                  </option>
-                  <option value="not_available">
-                    Not available — currently not offered
-                  </option>
-                </select>
-              )}
-              <input
-                type="number"
-                min={isRental ? 100 : 0}
-                step="0.01"
-                max={isRental ? 1000000 : 100000}
-                required={status === "available" && isRental}
-                disabled={status !== "available"}
-                value={status === "available" ? toDisplayAmount(value[k]) : ""}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  const next = raw === "" ? 0 : Math.round(Number(raw) * 100);
-                  onChange({ ...value, [k]: next });
-                }}
-              />
-            </label>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+import PricingFields from './standard-rental-fields';
 export default function OwnerWorkspace({
   admin = false,
   adminView = false,
@@ -206,7 +109,7 @@ export default function OwnerWorkspace({
   useEffect(() => {
     if (editingId) revealEditor();
   }, [editingId, revealEditor]);
-  const rentalModes=useRef(new Map<string,{custom?:RentalDetails;pricing?:Pricing;availability?:PackageAvailability}>());
+  const rentalModes=useRef(new Map<string,{custom?:RentalDetails;pricing?:ListingPricing;availability?:PackageAvailability}>());
   function switchCustomDetails(enabled:boolean){
     if(!draft||!!draft.rentalDetails===enabled)return;
     const saved=rentalModes.current.get(draft.id)||{};
@@ -215,7 +118,7 @@ export default function OwnerWorkspace({
       setDraft({...draft,rentalDetails:saved.custom||newCustomRentalDetails()});
     }else{
       rentalModes.current.set(draft.id,{...saved,custom:draft.rentalDetails||undefined});
-      setDraft({...draft,rentalDetails:null,pricing:saved.pricing||(draft.pricing.rent>0?draft.pricing:blank().pricing),packageAvailability:saved.availability||packageAvailabilitySchema.parse({})});
+      setDraft({...draft,rentalDetails:null,pricing:saved.pricing||((draft.pricing.rent??0)>0?draft.pricing:blank().pricing),packageAvailability:saved.availability||packageAvailabilitySchema.parse({})});
     }
   }
   const [rows, setRows] = useState<any[]>([]);
@@ -277,7 +180,7 @@ export default function OwnerWorkspace({
     setError("");
     setNotice("");
     try {
-      await demoApi("drafts", { ...draft, submit });
+      await demoApi("drafts", { ...draft, pricing:draft.rentalDetails?{...emptyLegacyPricing}:draft.pricing, submit });
       setNotice(
         submit
           ? "Submitted for final review. Use the Final listing review section below to approve and publish."
@@ -539,16 +442,17 @@ export default function OwnerWorkspace({
                   setDraft({
                     ...draft,
                     packageAvailability,
-                    pricing: preserveUnavailablePrices(
+                    pricing: pricingForAvailability(
                       draft.pricing,
                       packageAvailability,
                     ),
                   })
                 }
+                timings={draft.packageTimings}
+                onTimingsChange={packageTimings=>setDraft({...draft,packageTimings})}
               />
               <p className="muted">
-                For each package, enter its rental or mark it Not applicable /
-                Not available. Only available packages show a public price. All
+                For each package, enter its rental or choose Price on request if no amount was provided. Confirm the actual slot timings. Use Not applicable / Not available only for packages not offered. All
                 mandatory charges apply once per booking; zero means included.
                 Starter half-day rentals are half the full-day rental; review
                 these demo prices before submitting.
@@ -689,6 +593,10 @@ export default function OwnerWorkspace({
                       className="filter-button"
                       disabled={busy}
                       onClick={() => {
+                        if (admin) {
+                          window.location.assign('/owner?venue=' + encodeURIComponent(row.id));
+                          return;
+                        }
                         rentalModes.current.delete(row.data.id);
                         setDraft(row.data);
                         if (draft?.id === row.id) revealEditor();
@@ -779,33 +687,7 @@ export default function OwnerWorkspace({
                   <p>{row.data.address}</p>
                   <p>{row.data.description}</p>
                   <VenueCapacitySummary capacity={row.data.capacity} details={row.data.capacityDetails}/>
-                  {row.data.rentalDetails?<RentalOfferSummary value={row.data.rentalDetails}/>:<p>
-                    24-hour Marriage:{" "}
-                    {rentalSummary(
-                      row.data.packageAvailability.marriageRent,
-                      row.data.pricing.marriageRent,
-                    )}{" "}
-                    · Full Day:{" "}
-                    {rentalSummary(
-                      row.data.packageAvailability.rent,
-                      row.data.pricing.rent,
-                    )}{" "}
-                    · Morning:{" "}
-                    {rentalSummary(
-                      row.data.packageAvailability.morningRent,
-                      row.data.pricing.morningRent,
-                    )}{" "}
-                    · Evening:{" "}
-                    {rentalSummary(
-                      row.data.packageAvailability.eveningRent,
-                      row.data.pricing.eveningRent,
-                    )}{" "}
-                    · Extra hour: {money(row.data.pricing.extraHour / 100)} ·
-                    AC: {money(row.data.pricing.ac / 100)} · Generator:{" "}
-                    {money(row.data.pricing.generator / 100)} · Parking:{" "}
-                    {money(row.data.pricing.parking / 100)} · Cleaning:{" "}
-                    {money(row.data.pricing.cleaning / 100)}
-                  </p>}
+                  {row.data.rentalDetails?<RentalOfferSummary value={row.data.rentalDetails}/>:<StandardRentalSummary pricing={row.data.pricing} availability={row.data.packageAvailability} timings={row.data.packageTimings}/>}
                   <div className="draft-photos">
                     {row.data.images.map((id: string) => (
                       <a
