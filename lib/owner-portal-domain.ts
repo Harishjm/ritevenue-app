@@ -5,13 +5,14 @@ import {policySchema} from './catering';
 import {capacityDetailsSchema} from './venue-capacity';
 import {emptyLegacyPricing,rentalDetailsSchema} from './venue-offers';
 import {listingPricingSchema,packageTimingsSchema,pricingForAvailability} from './standard-rentals';
+import {venuePoliciesSchema} from './venue-policies';
 
 // Saving an incomplete draft is allowed. Submission uses the full listing schema.
 export const workingVenueSchema=z.object({
  name:z.string().max(100).default(''),city:z.string().max(100).default('Bengaluru'),
  locality:z.string().max(100).default(''),address:z.string().max(400).default(''),
  type:z.string().max(40).default('Wedding hall'),capacity:z.number().int().min(1).max(50000).nullable().default(null),
- capacityDetails:capacityDetailsSchema.nullable().default(null),description:z.string().max(3000).default(''),
+ capacityDetails:capacityDetailsSchema.nullable().default(null),description:z.string().max(3000).default(''),policies:venuePoliciesSchema,
  contactName:z.string().max(100).default(''),phone:z.string().max(30).default(''),
  pricing:listingPricingSchema.default({...emptyLegacyPricing}),
  rentalDetails:z.union([z.object({version:z.literal(2),text:z.string().max(5000)}).strict(),rentalDetailsSchema]).nullable().default({version:2,text:''}),

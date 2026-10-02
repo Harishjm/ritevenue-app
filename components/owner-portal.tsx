@@ -7,6 +7,8 @@ import VenueCapacityFields from './venue-capacity-fields';
 import VenueDetailsMode from './venue-details-mode';
 import RentalOfferEditor from './rental-offer-editor';
 import RentalOfferSummary from './rental-offer-summary';
+import VenuePoliciesEditor from './venue-policies-editor';
+import VenuePoliciesSummary from './venue-policies-summary';
 import CustomCateringEditor from './custom-catering-editor';
 import PricingFields from './standard-rental-fields';
 import StandardRentalSummary from './standard-rental-summary';
@@ -109,13 +111,14 @@ export default function OwnerPortal({initialVenue,resume=false}:{initialVenue?:s
       <VenueDetailsMode custom={!!data.rentalDetails} onChange={custom=>{if(data.rentalDetails)customDetails.current=data.rentalDetails;change({rentalDetails:custom?customDetails.current||{version:2,text:''}:null});}}/>
       {data.rentalDetails?<RentalOfferEditor value={data.rentalDetails} onChange={rentalDetails=>change({rentalDetails})}/>:<PricingFields value={data.pricing} availability={data.packageAvailability} onChange={pricing=>change({pricing})} onAvailabilityChange={packageAvailability=>change({packageAvailability,pricing:pricingForAvailability(data.pricing,packageAvailability)})} timings={data.packageTimings} onTimingsChange={packageTimings=>change({packageTimings})}/>}
       <CustomCateringEditor value={data.cateringPolicy} onChange={cateringPolicy=>change({cateringPolicy})}/>
+      <VenuePoliciesEditor value={data.policies} onChange={policies=>change({policies})}/>
       <label className="portal-check"><input type="checkbox" checked={data.rightsConfirmed} onChange={e=>change({rightsConfirmed:e.target.checked})}/>I am authorized to provide this venue’s details and photographs.</label>
       <VenuePhotoPicker count={data.images.length} busy={uploading} disabled={!data.rightsConfirmed} completed={uploads.filter(p=>p.state==='done').length} total={uploads.length} onFiles={files=>void uploadFiles(files)}/>
       <div className="draft-photos">{data.images.map((id,index)=><div key={id}><img src={'/api/owner/photos?photo='+id} width={150} height={110} alt={`${data.name} — photo ${index+1}`}/>{index===0?<span className="draft-cover-label">Cover photo</span>:<button type="button" className="draft-cover-button" onClick={()=>change({images:[id,...data.images.filter(photo=>photo!==id)]})}>Set as cover</button>}<button type="button" className="filter-button" aria-label={`Remove photo ${index+1}`} onClick={()=>change({images:data.images.filter(photo=>photo!==id)})}>Remove</button></div>)}</div>
       {uploads.filter(p=>p.state!=='done').map(photo=><div className="portal-upload" key={photo.id}><span>{photo.file.name} — {photo.error||photo.state}</span>{photo.state==='error'&&<><button type="button" disabled={uploading} onClick={()=>void uploadFiles([],photo)}>Retry upload</button><button type="button" disabled={uploading} onClick={()=>setUploads(list=>list.filter(p=>p.id!==photo.id))}>Dismiss</button></>}</div>)}
      </>}
      {step===2&&<>
-      <div className="portal-preview"><h3>{data.name||'Venue name'}</h3><p>{data.address||'Add the venue address'}</p><p>{data.capacity?`Up to ${data.capacity.toLocaleString('en-IN')} guests`:'Add guest capacity'}</p><p className="prose">{data.description||'Add a venue description'}</p>{data.images[0]&&<img src={'/api/owner/photos?photo='+data.images[0]} alt="Selected venue cover" width={600} height={360}/>}<p>{data.images.length} photos added · minimum 2, maximum 15</p>{data.rentalDetails?<RentalOfferSummary value={data.rentalDetails}/>:<StandardRentalSummary pricing={data.pricing} availability={data.packageAvailability} timings={data.packageTimings}/>}</div>
+      <div className="portal-preview"><h3>{data.name||'Venue name'}</h3><p>{data.address||'Add the venue address'}</p><p>{data.capacity?`Up to ${data.capacity.toLocaleString('en-IN')} guests`:'Add guest capacity'}</p><p className="prose">{data.description||'Add a venue description'}</p>{data.images[0]&&<img src={'/api/owner/photos?photo='+data.images[0]} alt="Selected venue cover" width={600} height={360}/>}<p>{data.images.length} photos added · minimum 2, maximum 15</p>{data.rentalDetails?<RentalOfferSummary value={data.rentalDetails}/>:<StandardRentalSummary pricing={data.pricing} availability={data.packageAvailability} timings={data.packageTimings}/>}<VenuePoliciesSummary value={data.policies}/></div>
       <PublicationFields key={editor.id} value={data.publication} admin={admin} preservePublished onChange={publication=>change({publication})}/>
       <p className="muted">You can return to correct any details. Publishing requires administrator approval.</p>
       <button className="primary" type="submit" disabled={uploads.some(p=>p.state!=='done')}>Submit for review</button>

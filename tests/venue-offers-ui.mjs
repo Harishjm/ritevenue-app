@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 const root=resolve('.sites-runtime/offer-ui-tests');mkdirSync(root,{recursive:true});writeFileSync(resolve(root,'package.json'),'{"type":"commonjs"}');
-for(const file of ['components/standard-rental-fields.tsx','lib/standard-rentals.ts','components/standard-rental-summary.tsx','lib/venue-capacity.ts','lib/venue-offers.ts','lib/venues.ts','lib/booking.ts','lib/catering.ts','components/custom-catering-editor.tsx','components/custom-catering-summary.tsx','components/rental-offer-editor.tsx','components/rental-offer-summary.tsx','components/venue-card-preview.tsx']){
+for(const file of ['components/standard-rental-fields.tsx','lib/standard-rentals.ts','components/standard-rental-summary.tsx','lib/venue-capacity.ts','lib/venue-seo.ts','lib/venue-offers.ts','lib/venue-policies.ts','lib/venues.ts','lib/booking.ts','lib/catering.ts','components/custom-catering-editor.tsx','components/custom-catering-summary.tsx','components/venue-policies-editor.tsx','components/venue-policies-summary.tsx','components/rental-offer-editor.tsx','components/rental-offer-summary.tsx','components/venue-card-preview.tsx']){
  const dest=resolve(root,file.replace(/\.tsx?$/,'.js'));mkdirSync(dirname(dest),{recursive:true});
  const source=readFileSync(file,'utf8').replace(/(['"])@\//g,(_,quote)=>quote+(relative(dirname(dest),root)||'.')+'/');
  writeFileSync(dest,ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText);
@@ -57,6 +57,7 @@ let pricing={rent:null,marriageRent:null,morningRent:null,eveningRent:null,extra
 let timings={...standard.defaultPackageTimings,morningRent:{start:'10:00',end:'16:00',nextDay:false},marriageRent:{start:'15:00',end:'15:00',nextDay:true}};
 html=renderToStaticMarkup(React.createElement(StandardSummary,{pricing,availability,timings}));
 assert.equal((html.match(/Price on request/g)||[]).length,4);assert.match(html,/10 AM to 4 PM/);assert.match(html,/3 PM to 3 PM next day/);assert.ok(!html.includes('₹0'));
+assert.match(html,/Full Day<small class="package-slot-label"> · /,'Package label and timing must read separately in extracted snippets');
 const fieldProps=()=>({value:pricing,availability,timings,onChange:next=>{pricing=next;},onAvailabilityChange:next=>{availability=next;pricing=standard.pricingForAvailability(pricing,next);},onTimingsChange:next=>{timings=next;}});
 html=renderToStaticMarkup(React.createElement(StandardFields,fieldProps()));
 assert.equal((html.match(/type="number"/g)||[]).length,5,'Only mandatory charges have amount inputs for unquoted packages');
@@ -73,3 +74,19 @@ fields.find(n=>n.props['aria-label']==='Half Day Morning rental start time').pro
 const mixedAvailability={...availability,marriageRent:'not_applicable',eveningRent:'not_available'};
 html=renderToStaticMarkup(React.createElement(StandardSummary,{pricing,availability:mixedAvailability,timings}));assert.match(html,/Not applicable/);assert.match(html,/Not available/);assert.ok(!html.includes('3 PM to 3 PM next day'),'Do not advertise times for a package not offered');
 console.log('Passed standard rental UI: unquoted amounts hidden, editable timings, blank-to-priced transitions, paise conversion, stale price clearing, overnight display and unavailable packages.');
+const seo=require('./lib/venue-seo.js');
+const lily={slug:'lily',name:'The Lily Pond',area:'Balagere',city:'Bengaluru',type:'Outdoor venue',capacity:600,capacityDetails:{minimum:null,seated:null,floating:null}};
+assert.equal(seo.venueSeoTitle(lily),'The Lily Pond Wedding Venue in Balagere, Bangalore');
+assert.equal(seo.venueSeoDescription(lily),'The Lily Pond in Balagere, Bengaluru (Bangalore) is an outdoor venue with up to 600 guests. View photos, rental details and reported availability.');
+const candidates=[{slug:'other-city',area:'Balagere',city:'Mysore'},{slug:'nearby',area:'Balagere',city:'Bengaluru'},{slug:'elsewhere',area:'Rajajinagar',city:'Bengaluru'},lily];
+assert.deepEqual(seo.relatedVenues(candidates,lily).map(v=>v.slug),['nearby','elsewhere']);
+console.log('Passed venue SEO: location-aware titles and descriptions, readable rental labels and related-city links.');
+const PoliciesEditor=require('./components/venue-policies-editor.js').default,PoliciesSummary=require('./components/venue-policies-summary.js').default;
+const policies='Outside catering allowed.\n\nMusic until 11 PM.\n<script>alert("x")</script>';
+html=renderToStaticMarkup(React.createElement(PoliciesEditor,{value:policies,onChange:()=>{}}));
+assert.match(html,/Venue policies/);assert.match(html,/maxLength="10000"/);assert.match(html,/Preview policies/);
+html=renderToStaticMarkup(React.createElement(PoliciesSummary,{value:policies}));
+assert.match(html,/Policies &amp; house rules/);assert.match(html,/Outside catering allowed\.\n\nMusic until 11 PM/);
+assert.ok(!html.includes('<script>'));assert.match(html,/&lt;script&gt;/);
+assert.equal(renderToStaticMarkup(React.createElement(PoliciesSummary,{value:'  '})),'');
+console.log('Passed venue policies UI: optional multiline editing, public preview, HTML escaping and empty-state hiding.');

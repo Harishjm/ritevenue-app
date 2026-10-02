@@ -31,6 +31,8 @@ import { optimizeVenuePhoto } from "@/lib/optimize-venue-photo";
 import { demoApi } from "@/lib/demo-client";
 import RentalOfferEditor from '@/components/rental-offer-editor';
 import RentalOfferSummary from '@/components/rental-offer-summary';
+import VenuePoliciesEditor from '@/components/venue-policies-editor';
+import VenuePoliciesSummary from '@/components/venue-policies-summary';
 import VenueDetailsMode from '@/components/venue-details-mode';
 import VenueCapacityFields from '@/components/venue-capacity-fields';
 import VenueCapacitySummary from '@/components/venue-capacity-summary';
@@ -55,6 +57,7 @@ type Draft = {
   capacity: number | null;
   capacityDetails: CapacityDetails | null;
   description: string;
+  policies: string;
   pricing: ListingPricing;
   images: string[];
   rightsConfirmed: boolean;
@@ -75,6 +78,7 @@ const blank = (): Draft => ({
   capacity: null,
   capacityDetails: null,
   description: "",
+  policies: "",
   pricing: pricingSchema.parse({
     rent: 10000000,
     ac: 0,
@@ -470,6 +474,7 @@ export default function OwnerWorkspace({
                   setDraft({ ...draft, cateringPolicy })
                 }
               />}
+              <VenuePoliciesEditor value={draft.policies} onChange={policies=>setDraft({...draft,policies})}/>
               <label className="addon-option">
                 <Checkbox
                   checked={draft.rightsConfirmed}
@@ -688,6 +693,7 @@ export default function OwnerWorkspace({
                   <p>{row.data.description}</p>
                   <VenueCapacitySummary capacity={row.data.capacity} details={row.data.capacityDetails}/>
                   {row.data.rentalDetails?<RentalOfferSummary value={row.data.rentalDetails}/>:<StandardRentalSummary pricing={row.data.pricing} availability={row.data.packageAvailability} timings={row.data.packageTimings}/>}
+                  <VenuePoliciesSummary value={row.data.policies}/>
                   <div className="draft-photos">
                     {row.data.images.map((id: string) => (
                       <a

@@ -48,3 +48,13 @@
 .package-slot-fields input, .package-slot-fields select { min-width: 0; width: 100%; }
 .package-slot-label { display: block; font-weight: 400; margin-top: 4px; }
 .standard-rental-summary dd { margin: 0; text-align: right; }
+
+.related-venues{margin-top:48px;padding-top:32px;border-top:1px solid #dce3df}
+.related-venues h2{font-family:Georgia,'Times New Roman',serif;font-size:28px;font-weight:400;margin-bottom:8px}
+.related-venues>p{color:#62716c;line-height:1.5;margin-bottom:20px}
+.related-venues-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.related-venues-list a{display:grid;gap:8px;padding:18px;border:1px solid #dce3df;border-radius:9px;background:#f8faf8}
+.related-venues-list a:hover{border-color:#8cae98;background:#f1f6f1}
+.related-venues-list span,.related-venues-list small{color:#62716c;font-size:13px}
+.related-venues-list strong{color:#183e34;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:400;line-height:1.3}
+@media(max-width:760px){.related-venues-list{grid-template-columns:1fr}.related-venues{margin-top:36px}}

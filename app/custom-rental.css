@@ -31,6 +31,7 @@ body .custom-rental-preview[open] summary{margin-bottom:14px}
 body .custom-rental-copy{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8;font-size:16px;text-align:left}
 body .custom-rental-summary{padding:24px;margin:24px 0;border:1px solid #d8e3da;border-radius:12px;background:#fafbf8;min-width:0}
 body .custom-rental-summary h3{margin:0 0 20px;font-size:24px;color:#183e34}
+body .venue-policies-summary h2{margin:0 0 20px;font-size:24px;color:#183e34}
 body .custom-rental-summary>.muted{margin:20px 0 0;font-size:14px;line-height:1.6}
 @media(max-width:640px){body .venue-details-mode-options{grid-template-columns:1fr}body .venue-details-mode-card{padding:18px}}
 @media(max-width:600px){body .custom-rental-editor,body .custom-rental-summary{padding:18px}body .custom-rental-meta{flex-direction:column;gap:6px}}

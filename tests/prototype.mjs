@@ -5,7 +5,7 @@ import {createRequire} from 'node:module';
 import {DatabaseSync} from 'node:sqlite';
 import assert from 'node:assert/strict';
 const root=resolve('.sites-runtime/prototype-tests');mkdirSync(root,{recursive:true});writeFileSync(resolve(root,'package.json'),'{"type":"commonjs"}');
-for(const file of ['lib/standard-rentals.ts','lib/venue-capacity.ts','lib/venue-offers.ts','lib/venue-photo.ts','lib/slugify.ts','lib/venue-url.ts','lib/guides.ts','app/sitemap.ts','lib/venue-image.ts','lib/intake-photo-server.ts','lib/venue-intake.ts','app/api/venue-applications/route.ts','lib/launch.ts','lib/publication.ts','lib/public-venues.ts','app/api/public/[action]/route.ts','lib/venues.ts','lib/catering.ts','lib/catering-server.ts','app/api/catering/[action]/route.ts','lib/booking.ts','lib/owner-venue.ts','lib/db.ts','lib/demo-server.ts','lib/calendar.ts','app/api/demo/[action]/route.ts']){
+for(const file of ['lib/standard-rentals.ts','lib/venue-capacity.ts','lib/venue-offers.ts','lib/venue-policies.ts','lib/venue-photo.ts','lib/slugify.ts','lib/venue-url.ts','lib/guides.ts','app/sitemap.ts','lib/venue-image.ts','lib/intake-photo-server.ts','lib/venue-intake.ts','app/api/venue-applications/route.ts','lib/launch.ts','lib/publication.ts','lib/public-venues.ts','app/api/public/[action]/route.ts','lib/venues.ts','lib/catering.ts','lib/catering-server.ts','app/api/catering/[action]/route.ts','lib/booking.ts','lib/owner-venue.ts','lib/db.ts','lib/demo-server.ts','lib/calendar.ts','app/api/demo/[action]/route.ts']){
  let source=readFileSync(file,'utf8').replace("import {env} from 'cloudflare:workers';",'const env=globalThis.__testEnv;');
  if(file==='lib/demo-server.ts')source=source.replace("import {getAuthenticatedUser,isAdminUser,type AuthUser} from './auth';",'type AuthUser=any;async function getAuthenticatedUser(){return globalThis.__testUser;}function isAdminUser(user){return user?.email===globalThis.__testEnv.RITEVENUE_ADMIN_EMAIL;}');
  const dest=resolve(root,file.replace(/\.ts$/,'.js'));mkdirSync(dirname(dest),{recursive:true});
@@ -317,7 +317,11 @@ for(const action of ['hold','confirm','release','start-checkout','complete-check
 for(const action of ['estimate','attach'])assert.equal((await cpost(action,cs)).status,410);
 globalThis.__testUser={userId:'couple-a',email:'couple@example.test'};
 const publicId=crypto.randomUUID(),calendarFrom=indiaToday(),calendarTo=domain.shiftDate(indiaToday(),30),unavailableDate=domain.shiftDate(indiaToday(),3);
-const publicDraft={...draft,id:publicId,name:'Owner-authorized test hall',images:[image.id,image2.id],submit:true,publication:{consent:false,calendar:{from:calendarFrom,to:calendarTo,unavailable:[unavailableDate]}}};
+const policyText='Outside catering allowed.\n\nMusic must stop by 11 PM.\nCancellation terms: confirm in writing.';
+const publicDraft={...draft,id:publicId,name:'Owner-authorized test hall',policies:policyText,images:[image.id,image2.id],submit:true,publication:{consent:false,calendar:{from:calendarFrom,to:calendarTo,unavailable:[unavailableDate]}}};
+const {draftSchema:listingDraftSchema}=require('./lib/owner-venue.js');
+assert.equal(listingDraftSchema.parse(draft).policies,'','Existing venues without policies remain valid');
+assert.equal(listingDraftSchema.safeParse({...publicDraft,policies:'x'.repeat(10001)}).success,false,'Policies are bounded on the server');
 assert.equal((await post('drafts',publicDraft)).status,200);
 const publicRevision=()=>sql.prepare('SELECT updated_at FROM owner_drafts WHERE id=?').get(publicId).updated_at;
 globalThis.__testUser={userId:'admin',email:'admin@example.test'};
@@ -333,6 +337,7 @@ assert.equal((await post('review',{id:publicId,status:'approved_public',note:'Ow
 globalThis.__testUser=null;
 const publicCatalog=await (await pget('catalog')).json();
 assert.equal(publicCatalog.venues.length,1);assert.equal(publicCatalog.venues[0].name,consented.name);
+assert.equal(publicCatalog.venues[0].policies,policyText,'Approved policies appear on the public listing');
 assert.ok(!JSON.stringify(publicCatalog).includes('review_note'));assert.ok(!JSON.stringify(publicCatalog).includes('owner_id'));
 assert.equal((await pget('image','?id='+image.id)).status,200);
 assert.equal((await pget('image','?id='+cateringPhoto)).status,404);
