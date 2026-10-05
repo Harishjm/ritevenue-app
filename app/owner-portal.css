@@ -3,6 +3,13 @@ body .owner-start h2,body .portal-editor h2,body .portal-venue-list h2{font:700 
 body .portal-editor{scroll-margin-top:20px}
 body .portal-editor-heading{display:flex;justify-content:space-between;gap:20px;align-items:start}
 body .portal-editor-heading>span{font-size:13px;white-space:nowrap;color:#526d5d}
+body .portal-reference{margin:4px 0 0;color:#526d5d;font-size:14px}
+body .portal-reference strong{color:#183e34;letter-spacing:.04em}
+body .portal-confirmation{color:#24342f;line-height:1.5}
+body .portal-confirmation-reference{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:16px;border:1px solid #cbdacf;border-radius:10px;background:#f5f9f6}
+body .portal-confirmation-reference span{width:100%;font-size:13px;color:#526d5d}
+body .portal-confirmation-reference strong{font-size:20px;letter-spacing:.05em;overflow-wrap:anywhere}
+body .portal-confirmation-reference button{margin-left:auto}
 body .portal-steps{display:flex;gap:8px;margin:24px 0;flex-wrap:wrap}
 body .portal-steps button{padding:12px 16px;border:1px solid #cbdacf;border-radius:7px;font-size:14px;background:white;color:#284e3e}
 body .portal-steps button[aria-current]{background:#155c49;color:white;border-color:#155c49}

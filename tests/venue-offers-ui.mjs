@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 const root=resolve('.sites-runtime/offer-ui-tests');mkdirSync(root,{recursive:true});writeFileSync(resolve(root,'package.json'),'{"type":"commonjs"}');
-for(const file of ['components/standard-rental-fields.tsx','lib/standard-rentals.ts','components/standard-rental-summary.tsx','lib/venue-capacity.ts','lib/venue-seo.ts','lib/venue-offers.ts','lib/venue-policies.ts','lib/venues.ts','lib/booking.ts','lib/catering.ts','components/custom-catering-editor.tsx','components/custom-catering-summary.tsx','components/venue-policies-editor.tsx','components/venue-policies-summary.tsx','components/rental-offer-editor.tsx','components/rental-offer-summary.tsx','components/venue-card-preview.tsx']){
+for(const file of ['components/standard-rental-fields.tsx','lib/standard-rentals.ts','lib/listing-card-price.ts','components/standard-rental-summary.tsx','lib/venue-capacity.ts','lib/venue-seo.ts','lib/venue-offers.ts','lib/venue-policies.ts','lib/venues.ts','lib/booking.ts','lib/catering.ts','components/custom-catering-editor.tsx','components/custom-catering-summary.tsx','components/venue-policies-editor.tsx','components/venue-policies-summary.tsx','components/rental-offer-editor.tsx','components/rental-offer-summary.tsx','components/venue-card-preview.tsx']){
  const dest=resolve(root,file.replace(/\.tsx?$/,'.js'));mkdirSync(dirname(dest),{recursive:true});
  const source=readFileSync(file,'utf8').replace(/(['"])@\//g,(_,quote)=>quote+(relative(dirname(dest),root)||'.')+'/');
  writeFileSync(dest,ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText);
@@ -60,6 +60,24 @@ assert.equal(previewModule.movePreview(preview,1,1),preview);assert.ok(previewMo
 html=renderToStaticMarkup(React.createElement(Preview,{href:'/venues/test',name:'Test hall',images:[photos[0]],descriptions:[],type:'Wedding hall'}));assert.ok(!html.includes('venue-preview-count'));
 console.log('Passed venue-card previews: cover-only initial rendering, photo descriptions, navigation, single-photo fallback, slide order and wraparound.');
 const standard=require('./lib/standard-rentals.js'),StandardSummary=require('./components/standard-rental-summary.js').default,StandardFields=require('./components/standard-rental-fields.js').default;
+const {listingCardPrice}=require('./lib/listing-card-price.js');
+const cardVenue={authorizationSource:'owner',rentalDetails:null,pricing:{rent:40000000,marriageRent:35000000,morningRent:25000000,eveningRent:25000000},packageAvailability:{rent:'available',marriageRent:'available',morningRent:'available',eveningRent:'available'},packageTimings:standard.defaultPackageTimings};
+assert.equal(listingCardPrice(cardVenue)?.key,'rent','Full Day wins when quoted');
+cardVenue.packageAvailability.rent='price_on_request';
+assert.equal(listingCardPrice(cardVenue)?.key,'marriageRent','A priced 24-hour package follows an unquoted Full Day');
+assert.equal(listingCardPrice(cardVenue)?.amount,35000000);
+cardVenue.packageAvailability.marriageRent='not_applicable';
+assert.equal(listingCardPrice(cardVenue)?.key,'morningRent','Morning follows when longer packages are not priced');
+cardVenue.packageAvailability.morningRent='not_available';
+assert.equal(listingCardPrice(cardVenue)?.key,'eveningRent','Evening is the final priced option');
+cardVenue.packageAvailability.eveningRent='price_on_request';
+assert.equal(listingCardPrice(cardVenue),null,'Stale prices behind unquoted statuses must not be shown');
+cardVenue.packageAvailability.marriageRent='available';cardVenue.pricing.marriageRent=0;
+assert.equal(listingCardPrice(cardVenue),null,'Zero must not be advertised as a rental price');
+cardVenue.pricing.marriageRent=35000000;cardVenue.authorizationSource='admin';
+assert.equal(listingCardPrice(cardVenue),null,'Admin-curated amounts are not owner-confirmed');
+cardVenue.authorizationSource='owner';cardVenue.rentalDetails={version:2,text:'Custom pricing text'};
+assert.equal(listingCardPrice(cardVenue),null,'Custom offer text is not a structured package quote');
 let availability=Object.fromEntries(standard.rentalKeys.map(key=>[key,'price_on_request']));
 let pricing={rent:null,marriageRent:null,morningRent:null,eveningRent:null,extraHour:0,ac:0,generator:0,parking:0,cleaning:0};
 let timings={...standard.defaultPackageTimings,morningRent:{start:'10:00',end:'16:00',nextDay:false},marriageRent:{start:'15:00',end:'15:00',nextDay:true}};

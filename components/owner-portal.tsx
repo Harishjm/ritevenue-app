@@ -18,10 +18,12 @@ import VenuePhotoPicker from './venue-photo-picker';
 import {optimizeVenuePhoto} from '@/lib/optimize-venue-photo';
 import {OWNER_START_KEY} from './owner-start';
 import AuthSignOut from './auth-sign-out';
+import {Dialog,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle} from './ui/dialog';
 
-type Venue={id:string;data:WorkingVenue;revision:number;status:string;published?:boolean;reviewNote?:string;history?:{revision:number;decision:string;note:string;created_at:string}[]};
+type Venue={id:string;data:WorkingVenue;revision:number;status:string;reference?:string|null;published?:boolean;reviewNote?:string;history?:{revision:number;decision:string;note:string;created_at:string}[]};
 type Dashboard={venues:Venue[];invites:{id:string;venue_id:string;name:string}[];email:string;admin:boolean};
 type Upload={id:string;file:File;state:'waiting'|'uploading'|'done'|'error';error?:string};
+const venueSteps=['Venue basics','Venue details','Photos','Preview & submit'] as const;
 class PortalError extends Error{constructor(message:string,public status:number){super(message);}}
 async function api<T>(body?:unknown):Promise<T>{
  const response=await fetch('/api/owner',{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined,cache:'no-store'});
@@ -29,13 +31,14 @@ async function api<T>(body?:unknown):Promise<T>{
 }
 export default function OwnerPortal({initialVenue,resume=false}:{initialVenue?:string;resume?:boolean}){
  const [dashboard,setDashboard]=useState<Dashboard|null>(null),[editor,setEditor]=useState<Venue|null>(null),[step,setStep]=useState(0),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[saveState,setSaveState]=useState('Saved'),[conflict,setConflict]=useState(false),[uploads,setUploads]=useState<Upload[]>([]),[uploading,setUploading]=useState(false),[reviewNote,setReviewNote]=useState(''),[inviteEmail,setInviteEmail]=useState(''),[inviteNote,setInviteNote]=useState('');
- const current=useRef(editor),saved=useRef(''),inFlight=useRef<Promise<void>|null>(null),started=useRef(false),editorElement=useRef<HTMLDivElement>(null),uploadLock=useRef(false),customDetails=useRef<WorkingVenue['rentalDetails']>(null);
+ const [confirmation,setConfirmation]=useState<{name:string;reference:string;updated:boolean}|null>(null),[copyStatus,setCopyStatus]=useState('');
+ const current=useRef(editor),saved=useRef(''),inFlight=useRef<Promise<void>|null>(null),started=useRef(false),editorElement=useRef<HTMLDivElement>(null),venueListElement=useRef<HTMLElement>(null),uploadLock=useRef(false),customDetails=useRef<WorkingVenue['rentalDetails']>(null);
  current.current=editor;
  const reload=useCallback(async()=>{const data=await api<Dashboard>();setDashboard(data);return data;},[]);
  function choose(row:Venue,admin:boolean){
   let data=workingVenueSchema.parse(row.data);
   if(!admin&&data.publication.source==='admin')data={...data,publication:{...data.publication,source:'owner',consent:false,authorizationNote:'',calendar:null,calendarUpdatedAt:null}};
-  customDetails.current=data.rentalDetails;saved.current=JSON.stringify(row.data);setEditor({...row,data});setConflict(false);setError('');setNotice('');setStep(row.status==='pending_review'?2:0);setUploads([]);setReviewNote('');
+  customDetails.current=data.rentalDetails;saved.current=JSON.stringify(row.data);setEditor({...row,data});setConflict(false);setError('');setNotice('');setStep(row.status==='pending_review'?venueSteps.length-1:0);setUploads([]);setReviewNote('');
   requestAnimationFrame(()=>editorElement.current?.scrollIntoView({behavior:'smooth',block:'start'}));
  }
  useEffect(()=>{
@@ -58,7 +61,7 @@ export default function OwnerPortal({initialVenue,resume=false}:{initialVenue?:s
   const serialized=JSON.stringify(row.data);if(!submit&&serialized===saved.current)return;
   setSaveState('Saving…');
   const job=(async()=>{
-   try{const result=await api<{revision:number;status:string}>({action:'save',id:row.id,revision:row.revision,data:row.data,submit});saved.current=serialized;const latest=current.current;if(latest?.id===row.id){current.current={...latest,...result};setEditor(current.current);}setSaveState('Saved');if(submit){setNotice('Submitted for review. Your existing public listing stays visible while these changes are reviewed.');await reload();}}
+   try{const result=await api<{revision:number;status:string;reference?:string}>({action:'save',id:row.id,revision:row.revision,data:row.data,submit});saved.current=serialized;const latest=current.current;if(latest?.id===row.id){current.current={...latest,...result};setEditor(current.current);}setSaveState('Saved');if(submit){setNotice('');setCopyStatus('');if(result.reference)setConfirmation({name:row.data.name,reference:result.reference,updated:!!row.published});else setNotice('Submitted for review. You can track it in My venues.');await reload();}}
    catch(e){setSaveState('Not saved');setError((e as Error).message);if(e instanceof PortalError&&e.status===409)setConflict(true);throw e;}
   })();inFlight.current=job;try{await job;}finally{inFlight.current=null;}
  }
@@ -88,16 +91,26 @@ export default function OwnerPortal({initialVenue,resume=false}:{initialVenue?:s
  }
  const data=editor?.data,locked=busy||uploading||editor?.status==='pending_review',admin=dashboard?.admin||false;
  return <div className="owner-portal">
+  <Dialog open={!!confirmation} onOpenChange={open=>{if(!open){setConfirmation(null);setCopyStatus('');}}}>
+   <DialogContent className="portal-confirmation">
+    <DialogHeader><DialogTitle>Venue submitted for review</DialogTitle><DialogDescription>{confirmation?.name} is now with the RiteVenue review team.</DialogDescription></DialogHeader>
+    <div className="portal-confirmation-reference"><span>Venue reference</span><strong>{confirmation?.reference}</strong><button type="button" className="filter-button" onClick={()=>{if(!confirmation)return;void navigator.clipboard.writeText(confirmation.reference).then(()=>setCopyStatus('Copied')).catch(()=>setCopyStatus('Copy failed. Select the reference above to copy it.'));}}>Copy reference</button></div>
+    {copyStatus&&<p role="status" className="muted">{copyStatus}</p>}
+    <p>{confirmation?.updated?'Your current public listing stays visible while these changes are reviewed.':'The listing will go live only after administrator approval.'} If changes are needed, you’ll see the review team’s feedback in this workspace.</p>
+    <p className="muted">Keep this reference when contacting RiteVenue. It is not an access code.</p>
+    <DialogFooter><button type="button" className="filter-button" onClick={()=>setConfirmation(null)}>Close</button><button type="button" className="primary" onClick={()=>{setConfirmation(null);requestAnimationFrame(()=>venueListElement.current?.scrollIntoView({behavior:'smooth',block:'start'}));}}>View my venues</button></DialogFooter>
+   </DialogContent>
+  </Dialog>
   <div className="workspace-actions"><button className="primary" disabled={busy||uploading||conflict} onClick={()=>void open()}>Add a venue</button><a className="filter-button" href="/owner">My venues</a>{admin&&<a className="filter-button" href="/admin">Admin workspace</a>}<AuthSignOut/></div>
   {dashboard&&<p className="muted">Signed in as {dashboard.email}</p>}
   {error&&<p className="error" role="alert">{error}</p>}{notice&&<p className="notice" role="status">{notice}</p>}
   {!dashboard&&!error&&<p role="status">Loading your venues…</p>}
   {dashboard?.invites.map(invite=><div className="notice" key={invite.id}><strong>You’re invited to manage {invite.name||'a venue'}.</strong><button className="filter-button" disabled={busy} onClick={()=>void action({action:'accept',id:invite.id})}>Accept invitation</button></div>)}
   {editor&&data&&<div className="portal-editor" ref={editorElement}>
-   <div className="portal-editor-heading"><div><p className="eyebrow">{ownerStatusLabels[editor.status]}{editor.published?' · Current listing remains live':''}</p><h2>{data.name||'Your new venue'}</h2></div><span role="status">{saveState}</span></div>
+   <div className="portal-editor-heading"><div><p className="eyebrow">{ownerStatusLabels[editor.status]}{editor.published?' · Current listing remains live':''}</p><h2>{data.name||'Your new venue'}</h2>{editor.reference&&<p className="portal-reference">Reference: <strong>{editor.reference}</strong></p>}</div><span role="status">{saveState}</span></div>
    {editor.reviewNote&&<aside className="notice"><strong>Review team feedback</strong><p>{editor.reviewNote}</p></aside>}
    {conflict&&<button className="filter-button" onClick={()=>{if(window.confirm('Discard unsaved changes and reload the saved version?'))void reload().then(list=>{const row=list.venues.find(v=>v.id===editor.id);if(row)choose(row,list.admin);});}}>Reload saved version</button>}
-   <nav className="portal-steps" aria-label="Venue form steps">{['Venue basics','Photos & details','Preview & submit'].map((label,index)=><button type="button" key={label} aria-current={step===index?'step':undefined} onClick={()=>setStep(index)}>{index+1}. {label}</button>)}</nav>
+   <nav className="portal-steps" aria-label="Venue form steps">{venueSteps.map((label,index)=><button type="button" key={label} aria-current={step===index?'step':undefined} onClick={()=>setStep(index)}>{index+1}. {label}</button>)}</nav>
    <form onSubmit={e=>{e.preventDefault();setBusy(true);void persist(true).catch(()=>{}).finally(()=>setBusy(false));}}>
     <fieldset disabled={locked||conflict} className="portal-fields stack-form">
      {step===0&&<>
@@ -112,12 +125,16 @@ export default function OwnerPortal({initialVenue,resume=false}:{initialVenue?:s
       {data.rentalDetails?<RentalOfferEditor value={data.rentalDetails} onChange={rentalDetails=>change({rentalDetails})}/>:<PricingFields value={data.pricing} availability={data.packageAvailability} onChange={pricing=>change({pricing})} onAvailabilityChange={packageAvailability=>change({packageAvailability,pricing:pricingForAvailability(data.pricing,packageAvailability)})} timings={data.packageTimings} onTimingsChange={packageTimings=>change({packageTimings})}/>}
       <CustomCateringEditor value={data.cateringPolicy} allowMainCustomDetails={!!data.rentalDetails} onChange={cateringPolicy=>change({cateringPolicy})}/>
       <VenuePoliciesEditor value={data.policies} onChange={policies=>change({policies})}/>
+     </>}
+     {step===2&&<>
+      <h3>Venue photos</h3>
+      <p className="muted">Add 2–15 photos, then choose the cover image for your listing. Photos stay private until the listing is approved and published.</p>
       <label className="portal-check"><input type="checkbox" checked={data.rightsConfirmed} onChange={e=>change({rightsConfirmed:e.target.checked})}/>I am authorized to provide this venue’s details and photographs.</label>
       <VenuePhotoPicker count={data.images.length} busy={uploading} disabled={!data.rightsConfirmed} completed={uploads.filter(p=>p.state==='done').length} total={uploads.length} onFiles={files=>void uploadFiles(files)}/>
       <div className="draft-photos">{data.images.map((id,index)=><div key={id}><img src={'/api/owner/photos?photo='+id} width={150} height={110} alt={`${data.name} — photo ${index+1}`}/>{index===0?<span className="draft-cover-label">Cover photo</span>:<button type="button" className="draft-cover-button" onClick={()=>change({images:[id,...data.images.filter(photo=>photo!==id)]})}>Set as cover</button>}<button type="button" className="filter-button" aria-label={`Remove photo ${index+1}`} onClick={()=>change({images:data.images.filter(photo=>photo!==id)})}>Remove</button></div>)}</div>
       {uploads.filter(p=>p.state!=='done').map(photo=><div className="portal-upload" key={photo.id}><span>{photo.file.name} — {photo.error||photo.state}</span>{photo.state==='error'&&<><button type="button" disabled={uploading} onClick={()=>void uploadFiles([],photo)}>Retry upload</button><button type="button" disabled={uploading} onClick={()=>setUploads(list=>list.filter(p=>p.id!==photo.id))}>Dismiss</button></>}</div>)}
      </>}
-     {step===2&&<>
+     {step===3&&<>
       <div className="portal-preview"><h3>{data.name||'Venue name'}</h3><p>{data.address||'Add the venue address'}</p><p>{data.capacity?`Up to ${data.capacity.toLocaleString('en-IN')} guests`:'Add guest capacity'}</p><p className="prose">{data.description||'Add a venue description'}</p>{data.images[0]&&<img src={'/api/owner/photos?photo='+data.images[0]} alt="Selected venue cover" width={600} height={360}/>}<p>{data.images.length} photos added · minimum 2, maximum 15</p>{data.rentalDetails?<RentalOfferSummary value={data.rentalDetails}/>:<StandardRentalSummary pricing={data.pricing} availability={data.packageAvailability} timings={data.packageTimings}/>}<VenuePoliciesSummary value={data.policies}/></div>
       <PublicationFields key={editor.id} value={data.publication} admin={admin} preservePublished onChange={publication=>change({publication})}/>
       <p className="muted">You can return to correct any details. Publishing requires administrator approval.</p>
@@ -125,7 +142,7 @@ export default function OwnerPortal({initialVenue,resume=false}:{initialVenue?:s
      </>}
     </fieldset>
    </form>
-   <div className="workspace-actions">{step>0&&<button className="filter-button" onClick={()=>setStep(step-1)}>Back</button>}{step<2&&<button className="primary" onClick={()=>setStep(step+1)}>Continue</button>}{editor.status!=='pending_review'&&<button className="filter-button" disabled={busy||uploading||conflict} onClick={()=>void persist().catch(()=>{})}>Save draft</button>}{editor.status==='pending_review'&&<button className="filter-button" disabled={busy} onClick={()=>void action({action:'withdraw',id:editor.id,revision:editor.revision})}>Withdraw submission & edit</button>}</div>
+   <div className="workspace-actions">{step>0&&<button className="filter-button" onClick={()=>setStep(step-1)}>Back</button>}{step<venueSteps.length-1&&<button className="primary" onClick={()=>setStep(step+1)}>Continue</button>}{editor.status!=='pending_review'&&<button className="filter-button" disabled={busy||uploading||conflict} onClick={()=>void persist().catch(()=>{})}>Save draft</button>}{editor.status==='pending_review'&&<button className="filter-button" disabled={busy} onClick={()=>void action({action:'withdraw',id:editor.id,revision:editor.revision})}>Withdraw submission & edit</button>}</div>
    {!admin&&editor.published&&<button className="filter-button" disabled={busy||uploading||conflict} onClick={()=>{if(window.confirm('Withdraw public-display permission and remove this venue from the public directory?'))void action({action:'withdraw_publication',id:editor.id,revision:editor.revision});}}>Withdraw public-display permission</button>}
    {admin&&<div className="portal-admin stack-form">
     {editor.status==='pending_review'&&<><h3>Review this submitted version</h3><p>Contact: {data.contactName} · {data.phone}</p><label>Feedback for the owner<textarea maxLength={1000} value={reviewNote} onChange={e=>setReviewNote(e.target.value)}/></label><div className="workspace-actions">{(['published','changes_requested','rejected'] as const).map(decision=><button key={decision} className={decision==='published'?'primary':'filter-button'} disabled={busy||reviewNote.trim().length<5} onClick={()=>void action({action:'review',id:editor.id,revision:editor.revision,decision,note:reviewNote})}>{decision==='published'?'Approve & publish':decision==='changes_requested'?'Request changes':'Reject'}</button>)}</div></>}
@@ -135,6 +152,6 @@ export default function OwnerPortal({initialVenue,resume=false}:{initialVenue?:s
    </div>}
    {!!editor.history?.length&&<details><summary>Submission and review history</summary>{editor.history.map((event,index)=><p key={index}><strong>{event.decision.replaceAll('_',' ')}</strong> · {new Date(event.created_at).toLocaleDateString()}<br/>{event.note}</p>)}</details>}
   </div>}
-  <section className="portal-venue-list"><h2>{admin?'Venue submissions & owner access':'My venues'}</h2>{dashboard&&!dashboard.venues.length&&<p>No venues yet. Start your first draft above.</p>}{dashboard?.venues.map(row=><article key={row.id} className="portal-venue-card">{row.data.images[0]&&<img src={'/api/owner/photos?photo='+row.data.images[0]} alt={row.data.name+' cover'} width={160} height={110}/>}<div><p className="tag">{ownerStatusLabels[row.status]}{row.published?' · Live listing':''}</p><h3>{row.data.name||'Untitled venue'}</h3><p>{row.data.locality}, {row.data.city}</p>{row.reviewNote&&<p>{row.reviewNote}</p>}<button className="primary" disabled={busy||uploading||conflict} onClick={()=>void open(row)}>{row.status==='pending_review'?'View submission':row.status==='changes_requested'?'Fix requested changes':'Continue editing'}</button>{row.published&&<a className="filter-button" href={venuePublicPath({...row.data,id:row.id})}>View public listing</a>}</div></article>)}</section>
+  <section className="portal-venue-list" ref={venueListElement}><h2>{admin?'Venue submissions & owner access':'My venues'}</h2>{dashboard&&!dashboard.venues.length&&<p>No venues yet. Start your first draft above.</p>}{dashboard?.venues.map(row=><article key={row.id} className="portal-venue-card">{row.data.images[0]&&<img src={'/api/owner/photos?photo='+row.data.images[0]} alt={row.data.name+' cover'} width={160} height={110}/>}<div><p className="tag">{ownerStatusLabels[row.status]}{row.published?' · Live listing':''}</p><h3>{row.data.name||'Untitled venue'}</h3>{row.reference&&<p className="portal-reference">Reference: <strong>{row.reference}</strong></p>}<p>{row.data.locality}, {row.data.city}</p>{row.reviewNote&&<p>{row.reviewNote}</p>}<button className="primary" disabled={busy||uploading||conflict} onClick={()=>void open(row)}>{row.status==='pending_review'?'View submission':row.status==='changes_requested'?'Fix requested changes':'Continue editing'}</button>{row.published&&<a className="filter-button" href={venuePublicPath({...row.data,id:row.id})}>View public listing</a>}</div></article>)}</section>
  </div>;
 }

@@ -86,9 +86,9 @@ try{
  await db.prepare('UPDATE owner_drafts SET data_json=? WHERE id=?').bind(JSON.stringify(standardPublished),draftId).run();
  const standardPage=await worker.dispatchFetch(origin+listing.publicPath,{redirect:'manual'});assert.equal(standardPage.status,200);
  const standardHtml=await standardPage.text();assert.match(standardHtml,/Price on request/);assert.match(standardHtml,/10 AM to 4 PM/);assert.match(standardHtml,/5 PM to 11 PM/);assert.match(standardHtml,/70,000/);
- const standardHome=await (await worker.dispatchFetch(origin+'/')).text();assert.match(standardHome,/Price on request/);assert.ok(!standardHome.includes('full-day base rent'),'A null rental must not be advertised as a zero full-day price');
+ const standardHome=await (await worker.dispatchFetch(origin+'/')).text();assert.match(standardHome,/70,000/);assert.match(standardHome,/Half Day Evening(?:<!-- -->|\s)*rental/);assert.ok(!standardHome.includes('full-day base rent'),'A shorter quoted slot must not be labelled as full-day rent');
  await db.prepare('UPDATE owner_drafts SET data_json=? WHERE id=?').bind(JSON.stringify(published),draftId).run();
- console.log('Passed built Worker standard rentals: price-on-request venue/card rendering, actual slot timings and mixed quoted/unquoted prices.');
+ console.log('Passed built Worker standard rentals: quoted shorter-slot card rendering, actual slot timings and mixed quoted/unquoted prices.');
  const updated={...published,name:'Renamed fixture resort'};
  await db.prepare('UPDATE owner_drafts SET data_json=? WHERE id=?').bind(JSON.stringify(updated),draftId).run();
  const newListing=(await (await worker.dispatchFetch(origin+'/api/public/catalog')).json()).venues.find(venue=>venue.slug===listing.slug);

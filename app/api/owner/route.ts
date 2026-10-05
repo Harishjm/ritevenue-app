@@ -2,14 +2,14 @@ import {z} from 'zod';
 import {AuthError,consumeRate,isAdminUser} from '@/lib/auth';
 import {readBody} from '@/lib/demo-server';
 import {db} from '@/lib/db';
-import {portalUser,portalList,createWorkspace,saveWorkspace,withdrawSubmission,reviewWorkspace,inviteOwner,acceptInvite,workspace} from '@/lib/owner-portal-server';
+import {portalUser,portalList,createWorkspace,saveWorkspace,withdrawSubmission,reviewWorkspace,inviteOwner,acceptInvite,workspace,workspaceReference} from '@/lib/owner-portal-server';
 export const dynamic='force-dynamic';
 export const portalHeaders={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Vary':'Cookie'};
 export const portalJson=(data:unknown,status=200)=>Response.json(data,{status,headers:portalHeaders});
 export function portalError(error:unknown){return portalJson({error:error instanceof AuthError?error.message:error instanceof z.ZodError?error.issues[0].message:'Unable to complete the request. Please retry.'},error instanceof AuthError?error.status:error instanceof z.ZodError?400:503);}
 export async function GET(request:Request){try{
  const user=await portalUser(request),id=new URL(request.url).searchParams.get('venue');
- if(id){const row=await workspace(user,z.string().uuid().parse(id));return portalJson({id:row.id,revision:row.revision,status:row.status,data:JSON.parse(row.data_json)});}
+ if(id){const row=await workspace(user,z.string().uuid().parse(id));return portalJson({id:row.id,revision:row.revision,status:row.status,reference:await workspaceReference(row.id),data:JSON.parse(row.data_json)});}
  return portalJson(await portalList(user));
 }catch(error){return portalError(error);}}
 export async function POST(request:Request){try{
@@ -25,7 +25,7 @@ export async function POST(request:Request){try{
   z.object({action:z.literal('unpublish'),id:z.string().uuid(),revision:z.number().int().positive()}).strict(),
   z.object({action:z.literal('withdraw_publication'),id:z.string().uuid(),revision:z.number().int().positive()}).strict()
  ]).parse(raw);
- if(action.action==='open'){const row=await createWorkspace(user,action.id);return portalJson({id:row.id,revision:row.revision,status:row.status,data:JSON.parse(row.data_json)});}
+ if(action.action==='open'){const row=await createWorkspace(user,action.id);return portalJson({id:row.id,revision:row.revision,status:row.status,reference:await workspaceReference(row.id),data:JSON.parse(row.data_json)});}
  if(action.action==='save')return portalJson(await saveWorkspace(user,action.id,action.revision,action.data,action.submit));
  if(action.action==='withdraw')await withdrawSubmission(user,action.id,action.revision);
  if(action.action==='review')await reviewWorkspace(user,action.id,action.revision,action.decision,action.note);

@@ -1,6 +1,6 @@
 # RiteVenue SEO and content plan
 
-Prepared 6 October 2026. The first implementation batch is in the local repository; it has not been deployed. No automatic publishing schedule has been activated.
+Prepared and updated 6 October 2026. The first implementation batch is committed, and the owner reports it has been deployed. No automatic publishing schedule has been activated.
 
 ## Implementation progress — 6 October 2026
 
@@ -8,7 +8,7 @@ The first batch covers the reusable site work behind Days 1–8 of the queue. A 
 
 Venue-specific facts for Lily Pond, Nandi Link Grounds and Pergola remain to be checked against their live records and operators before copy or prices are changed. Pergola's current redirect and Google-selected canonical still need a live check. The admin article editor, content queue, AI-assisted drafts, scheduling, new guides and new locality/type/budget pages are not built yet. The plan below remains the queue for those steps.
 
-Local verification for this batch: TypeScript check, production build and the prototype test suite passed. Targeted lint completed with no errors; it retains two existing warnings about unoptimized venue images. Deployment and Search Console submission have not been performed.
+Local verification for this batch: TypeScript check, production build and the prototype test suite passed. Targeted lint completed with no errors; it retains two existing warnings about unoptimized venue images. A post-deployment live audit returned HTTP 200, indexable, and self-canonical for the Bangalore collection; the live sitemap contained it. Search Console had not yet recorded a crawl of that new URL when inspected on 6 October.
 
 ## 1. Decision
 
@@ -107,38 +107,40 @@ Every new brief should record: primary intent; candidate query family and whethe
 
 This is a queue of daily work items, not a requirement to publish 30 articles. Editorial lead is the owner unless otherwise assigned; a venue representative verifies venue-specific facts, and a developer owns technical pages. A blocked item stays a draft. Review published articles after approximately 28 and 56 days; inspect basic crawlability immediately after release.
 
-| Day | Work item | Action and evidence |
-| --- | --- | --- |
-| 1 | Lily Pond listing | Refresh; GSC evidence above |
-| 2 | Nandi Link Grounds listing | Refresh; GSC evidence above |
-| 3 | Pergola identity and canonical check | Verify; GSC evidence above |
-| 4 | Bangalore venue collection | New collection; inventory-dependent hypothesis |
-| 5 | Bengaluru wedding venue checklist | Refresh existing guide |
-| 6 | Compare an itemized rental quote | Refresh existing guide |
-| 7 | Indoor or outdoor wedding venue | Refresh existing guide |
-| 8 | Guest count and venue capacity | Refresh existing guide |
-| 9 | Banquet hall, lawn or resort? | New comparison guide; exploratory |
-| 10 | An intimate Bangalore wedding: space and guest-flow checklist | New guide; exploratory |
-| 11 | A simple wedding: decide what to keep, simplify or skip | New guide; exploratory |
-| 12 | Seating capacity versus floating capacity | Expand Day 8; avoid a second article for the same intent |
-| 13 | Rajajinagar venue comparison and visit planning | Collection or guide section, subject to inventory |
-| 14 | A 300-guest event: ceremony and dining layout questions | Add a worked example to Day 8; exploratory |
-| 15 | What a whole-wedding budget includes | New guide; exploratory |
-| 16 | ₹5 lakh scenario worksheet | Add a researched example to Day 15; no affordability promise |
-| 17 | ₹10 lakh scenario worksheet | Same budget guide; verified assumptions required |
-| 18 | Premium wedding planning: what changes the budget? | Distinct service/logistics guide if evidence is available |
-| 19 | Per-plate catering: compare the complete food bill | New guide; exploratory; obtain real quote examples |
-| 20 | Outside caterers: questions to ask the venue | New guide; verify permissions, no blanket claims |
-| 21 | 24-hour rental versus a shorter event slot | New guide; real published slot examples |
-| 22 | Outdoor celebrations: rain and indoor backup | Enrich existing indoor/outdoor guide |
-| 23 | Hotels, lawns and halls around Whitefield/Balagere | Research collection; publish only if comparison is useful |
-| 24 | Reception and engagement layouts | New guide if it adds materially different advice |
-| 25 | Resort wedding versus city wedding | New comparison; focus on travel, rooms and event logistics |
-| 26 | Mysore wedding planning | Research inventory and local facts; no thin destination page |
-| 27 | Questions about deposits, cancellation and overtime | New practical checklist; quote contract wording accurately |
-| 28 | Parking, access and guest transport | New guide with verified examples |
-| 29 | Venue visit worksheet | Downloadable/supporting resource and guide refresh |
-| 30 | Performance and content review | Review GSC coverage, query overlap, enquiries and next queue |
+Status as of 6 October 2026: **7 of 30 complete (23%)**, **4 partly complete**, **19 not started**. “Complete” means the planned page or guide update exists in the code; it does not mean Google has indexed it. A partial item does not count toward the 7.
+
+| Day | Status | Work item | What is done / still needed |
+| --- | --- | --- | --- |
+| 1 | ◐ Partial | Lily Pond listing | Shared venue-to-guide links added; verify and refresh this venue's specific facts and copy |
+| 2 | ◐ Partial | Nandi Link Grounds listing | Shared venue-to-guide links added; verify and refresh this venue's specific facts and copy |
+| 3 | ☐ Open | Pergola identity and canonical check | Check current redirect, Google-selected canonical and venue identity |
+| 4 | ✅ Done | Bangalore venue collection | Live page built with approved listings, comparison guidance and conditional sitemap inclusion |
+| 5 | ✅ Done | Bengaluru wedding venue checklist | Existing guide expanded with visit questions and internal links |
+| 6 | ✅ Done | Compare an itemized rental quote | Existing guide expanded with a quote comparison worksheet |
+| 7 | ✅ Done | Indoor or outdoor wedding venue | Existing guide expanded with a specific fallback comparison |
+| 8 | ✅ Done | Guest count and venue capacity | Existing guide expanded with layout questions and a worked example |
+| 9 | ☐ Open | Banquet hall, lawn or resort? | Write and review a new comparison guide |
+| 10 | ☐ Open | An intimate Bangalore wedding: space and guest-flow checklist | Write and review a new guide |
+| 11 | ☐ Open | A simple wedding: decide what to keep, simplify or skip | Write and review a new guide |
+| 12 | ◐ Partial | Seating capacity versus floating capacity | Standing/seated difference covered; explain floating capacity explicitly within Day 8 guide |
+| 13 | ☐ Open | Rajajinagar venue comparison and visit planning | Check inventory, then create a useful collection or guide section |
+| 14 | ✅ Done | A 300-guest event: ceremony and dining layout questions | Worked example added to Day 8 guide |
+| 15 | ☐ Open | What a whole-wedding budget includes | Write and review a new guide |
+| 16 | ☐ Open | ₹5 lakh scenario worksheet | Research assumptions and add to Day 15 guide |
+| 17 | ☐ Open | ₹10 lakh scenario worksheet | Research assumptions and add to Day 15 guide |
+| 18 | ☐ Open | Premium wedding planning: what changes the budget? | Write distinct service/logistics guide if evidence supports it |
+| 19 | ☐ Open | Per-plate catering: compare the complete food bill | Obtain real quote examples and write guide |
+| 20 | ☐ Open | Outside caterers: questions to ask the venue | Verify permissions and write guide |
+| 21 | ☐ Open | 24-hour rental versus a shorter event slot | Use real published slot examples in a new guide |
+| 22 | ✅ Done | Outdoor celebrations: rain and indoor backup | Existing indoor/outdoor guide now asks for a full backup layout and terms |
+| 23 | ☐ Open | Hotels, lawns and halls around Whitefield/Balagere | Research inventory before publishing a comparison |
+| 24 | ☐ Open | Reception and engagement layouts | Write if this adds distinct advice |
+| 25 | ☐ Open | Resort wedding versus city wedding | Write travel, rooms and event logistics comparison |
+| 26 | ☐ Open | Mysore wedding planning | Research inventory and local facts first |
+| 27 | ☐ Open | Questions about deposits, cancellation and overtime | Write practical guide using accurate contract examples |
+| 28 | ☐ Open | Parking, access and guest transport | Write guide with verified examples |
+| 29 | ◐ Partial | Venue visit worksheet | Visit checklist exists in Day 5 guide; make a reusable/downloadable worksheet |
+| 30 | ☐ Open | Performance and content review | Review GSC and enquiry outcomes after the first content cycle |
 
 This produces approximately 10–12 new substantive guides, four guide refreshes and a small number of collections/listing improvements, depending on available evidence. Scale after results and editorial capacity support it. Do not pad articles to a fixed word count.
 
