@@ -13,6 +13,8 @@ import {money} from '@/lib/venues';
 import {policyLabels} from '@/lib/catering';
 import {matchesVenueUrl} from '@/lib/venue-url';
 import {relatedVenues,venueSeoDescription,venueSeoTitle} from '@/lib/venue-seo';
+import {BANGALORE_VENUES_PATH,isBangaloreVenue} from '@/lib/venue-collections';
+import Link from 'next/link';
 
 export const dynamic='force-dynamic';
 
@@ -41,7 +43,7 @@ export default async function Venue({params,searchParams}:{params:Promise<{slug:
  }
  const nearby=relatedVenues(venues,venue);
  return <main className="content-page">
-  <nav className="breadcrumb" aria-label="Breadcrumb"><a href="/">Venues</a><span>/</span><span>{venue.area}</span></nav>
+  <nav className="breadcrumb" aria-label="Breadcrumb"><Link href="/">Venues</Link><span>/</span>{isBangaloreVenue(venue)?<Link href={BANGALORE_VENUES_PATH}>Bangalore</Link>:<span>{venue.city}</span>}<span>/</span><span>{venue.name}</span></nav>
   <div className="detail-title">
    <span className="tag">{venue.type} · {venue.authorizationSource==='admin'?'RiteVenue-curated listing':'Owner-approved listing'}</span>
    <h1>{venue.name}</h1>
@@ -72,6 +74,17 @@ export default async function Venue({params,searchParams}:{params:Promise<{slug:
    <p>Catering / kitchen fee: {money(venue.cateringPolicy.venueFee/100)} · Minimum food spend: {money(venue.cateringPolicy.minimumFoodSpend/100)}. Catering booking is not offered during this launch.</p>
   </div></section>}
   <VenuePoliciesSummary value={venue.policies}/>
+  <section className="venue-planning-links" aria-labelledby="venue-planning-title">
+   <h2 id="venue-planning-title">Plan your visit to {venue.name}</h2>
+   <p>Use these checklists to compare the venue with your other options. Confirm the current layout, available hours, total charges and policies directly with the venue.</p>
+   <div>
+    {isBangaloreVenue(venue)&&<Link href={BANGALORE_VENUES_PATH}>Compare Bangalore venues</Link>}
+    <Link href="/guides/bengaluru-wedding-venue-checklist">Venue visit checklist</Link>
+    <Link href="/guides/guest-count-and-venue-capacity">Check guest capacity</Link>
+    <Link href="/guides/understand-venue-rental-pricing">Compare rental quotes</Link>
+    <Link href="/guides/indoor-outdoor-wedding-venue">Indoor or outdoor planning</Link>
+   </div>
+  </section>
   <PublicCalendar slug={venue.slug} initialCalendar={venue.calendar} initialUpdatedAt={venue.calendarUpdatedAt||''} source={venue.authorizationSource}/>
   {nearby.length>0&&<section className="related-venues" aria-labelledby="related-venues-title">
    <h2 id="related-venues-title">More wedding venues in {venue.city}</h2>

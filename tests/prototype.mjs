@@ -5,7 +5,7 @@ import {createRequire} from 'node:module';
 import {DatabaseSync} from 'node:sqlite';
 import assert from 'node:assert/strict';
 const root=resolve('.sites-runtime/prototype-tests');mkdirSync(root,{recursive:true});writeFileSync(resolve(root,'package.json'),'{"type":"commonjs"}');
-for(const file of ['lib/standard-rentals.ts','lib/venue-capacity.ts','lib/venue-offers.ts','lib/venue-policies.ts','lib/venue-photo.ts','lib/slugify.ts','lib/venue-url.ts','lib/guides.ts','app/sitemap.ts','lib/venue-image.ts','lib/intake-photo-server.ts','lib/venue-intake.ts','app/api/venue-applications/route.ts','lib/launch.ts','lib/publication.ts','lib/public-venues.ts','app/api/public/[action]/route.ts','lib/venues.ts','lib/catering.ts','lib/catering-server.ts','app/api/catering/[action]/route.ts','lib/booking.ts','lib/owner-venue.ts','lib/db.ts','lib/demo-server.ts','lib/calendar.ts','app/api/demo/[action]/route.ts']){
+for(const file of ['lib/standard-rentals.ts','lib/venue-capacity.ts','lib/venue-collections.ts','lib/venue-offers.ts','lib/venue-policies.ts','lib/venue-photo.ts','lib/slugify.ts','lib/venue-url.ts','lib/guides.ts','app/sitemap.ts','lib/venue-image.ts','lib/intake-photo-server.ts','lib/venue-intake.ts','app/api/venue-applications/route.ts','lib/launch.ts','lib/publication.ts','lib/public-venues.ts','app/api/public/[action]/route.ts','lib/venues.ts','lib/catering.ts','lib/catering-server.ts','app/api/catering/[action]/route.ts','lib/booking.ts','lib/owner-venue.ts','lib/db.ts','lib/demo-server.ts','lib/calendar.ts','app/api/demo/[action]/route.ts']){
  let source=readFileSync(file,'utf8').replace("import {env} from 'cloudflare:workers';",'const env=globalThis.__testEnv;');
  if(file==='lib/demo-server.ts')source=source.replace("import {getAuthenticatedUser,isAdminUser,type AuthUser} from './auth';",'type AuthUser=any;async function getAuthenticatedUser(){return globalThis.__testUser;}function isAdminUser(user){return user?.email===globalThis.__testEnv.RITEVENUE_ADMIN_EMAIL;}');
  const dest=resolve(root,file.replace(/\.ts$/,'.js'));mkdirSync(dirname(dest),{recursive:true});
@@ -625,11 +625,15 @@ assert.equal(await resolvePublicVenue(venuePublicSlug(renamedCapacity)),null);
 console.log('Passed readable venue URLs: normalization, collision-free identity, legacy/calendar compatibility, rename resolution and unpublished listing protection.');
 
 const sitemap=require('./app/sitemap.js').default;
+const {hasUsefulBangaloreCollection,BANGALORE_VENUES_PATH}=require('./lib/venue-collections.js');
+assert.equal(hasUsefulBangaloreCollection([{city:'Bengaluru'},{city:'Bangalore'},{city:'Mysore'}]),false);
+assert.equal(hasUsefulBangaloreCollection([{city:'Bengaluru'},{city:'Bangalore'},{city:' bengaluru '}]),true);
 globalThis.__testEnv.RITEVENUE_DEPLOYMENT='standalone_cloudflare_production';
 const sitemapEntries=await sitemap();
 const liveCatalog=(await (await pget('catalog')).json()).venues;
 assert.ok(liveCatalog.length>0);
 for(const venue of liveCatalog)assert.ok(sitemapEntries.some(entry=>entry.url==='https://ritevenue.in'+venue.publicPath));
+assert.equal(sitemapEntries.some(entry=>entry.url==='https://ritevenue.in'+BANGALORE_VENUES_PATH),hasUsefulBangaloreCollection(liveCatalog),'The city collection is indexed only with a useful choice of venues');
 assert.equal(sitemapEntries.some(entry=>/\/venues\/owner-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(entry.url)),false);
 assert.equal(sitemapEntries.some(entry=>entry.url.endsWith(venuePublicSlug(renamedCapacity))),false,'Withdrawn listings must not appear in the sitemap');
 globalThis.__testEnv.RITEVENUE_DEPLOYMENT='standalone_cloudflare_staging';

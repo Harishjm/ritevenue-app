@@ -8,6 +8,7 @@
 @import "./venue-capacity.css";
 @import "./venue-overview.css";
 @import "./owner-portal.css";
+@import "./seo-content.css";
 
 .venue-card-preview{touch-action:pan-y}
 .venue-preview-track{display:flex;width:100%;height:100%;transition:transform .45s ease}

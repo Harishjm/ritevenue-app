@@ -2,5 +2,6 @@ import type {MetadataRoute} from 'next';
 import {guides} from '@/lib/guides';
 import {publicVenues} from '@/lib/public-venues';
 import {SITE_ORIGIN,publicIndexingEnabled} from '@/lib/launch';
+import {BANGALORE_VENUES_PATH,hasUsefulBangaloreCollection} from '@/lib/venue-collections';
 export const dynamic='force-dynamic';
-export default async function sitemap():Promise<MetadataRoute.Sitemap>{if(!publicIndexingEnabled())return [];const venues=await publicVenues();return [{url:SITE_ORIGIN},{url:SITE_ORIGIN+'/plan-your-wedding'},{url:SITE_ORIGIN+'/guides'},{url:SITE_ORIGIN+'/how-it-works'},{url:SITE_ORIGIN+'/list-your-venue'},...guides.map(g=>({url:SITE_ORIGIN+'/guides/'+g.slug})),...venues.map(v=>({url:SITE_ORIGIN+v.publicPath,lastModified:v.updatedAt}))];}
+export default async function sitemap():Promise<MetadataRoute.Sitemap>{if(!publicIndexingEnabled())return [];const venues=await publicVenues();return [{url:SITE_ORIGIN},{url:SITE_ORIGIN+'/plan-your-wedding'},{url:SITE_ORIGIN+'/guides'},{url:SITE_ORIGIN+'/how-it-works'},{url:SITE_ORIGIN+'/list-your-venue'},...(hasUsefulBangaloreCollection(venues)?[{url:SITE_ORIGIN+BANGALORE_VENUES_PATH}]:[]),...guides.map(g=>({url:SITE_ORIGIN+'/guides/'+g.slug})),...venues.map(v=>({url:SITE_ORIGIN+v.publicPath,lastModified:v.updatedAt}))];}
