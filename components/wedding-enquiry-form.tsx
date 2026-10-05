@@ -4,6 +4,7 @@ import {useRef,useState,type FormEvent} from 'react';
 import Link from 'next/link';
 import {ArrowRight,CheckCircle2} from 'lucide-react';
 import {budgetOptions,foodOptions,helpOptions,plannerOptions,weddingEnquirySchema} from '@/lib/wedding-enquiries';
+import {enquiryDisplayCode} from '@/lib/enquiry-code';
 
 function Options({items}:{items:Record<string,string>}){return <>{Object.entries(items).map(([value,label])=><option value={value} key={value}>{label}</option>)}</>;}
 
@@ -37,8 +38,8 @@ export default function WeddingEnquiryForm({today}:{today:string}){
  if(reference)return <div className="wedding-success" ref={success} tabIndex={-1} role="status">
   <CheckCircle2 size={40} aria-hidden="true"/><p className="eyebrow">YOUR NEXT CHAPTER STARTS HERE</p><h2>We’ve received your wedding enquiry.</h2>
   <p>Our team will review your preferences and contact you by {contactMethod==='whatsapp'?'WhatsApp':'phone'} to discuss the next steps.</p>
-  <p className="enquiry-reference">Your enquiry reference<br/><strong>{reference}</strong></p>
-  <p className="muted">Keep this reference for follow-up. No venue or service has been booked, and no payment is due. Availability and prices will be confirmed with you before any booking.</p>
+  <p className="enquiry-reference">Your 4-digit confirmation code<br/><strong className="enquiry-code">{enquiryDisplayCode(reference)}</strong></p>
+  <p className="muted">For follow-up, share this code with the name and phone number or email you used. No venue or service has been booked, and no payment is due. Availability and prices will be confirmed with you before any booking.</p>
   <Link href="/guides" className="primary">Explore wedding planning guides <ArrowRight size={17}/></Link>
  </div>;
 

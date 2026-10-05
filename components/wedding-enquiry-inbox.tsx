@@ -2,6 +2,7 @@
 
 import {useCallback,useEffect,useState,type FormEvent} from 'react';
 import {budgetOptions,foodOptions,helpOptions,plannerOptions,enquiryStatuses,planningToday,type EnquiryRow,type EnquiryStatus,type EnquiryEvent} from '@/lib/wedding-enquiries';
+import {enquiryDisplayCode} from '@/lib/enquiry-code';
 
 async function api<T>(path:string,options:RequestInit={}):Promise<T>{
  const response=await fetch('/api/wedding-enquiries'+path,{...options,cache:'no-store'});
@@ -16,7 +17,7 @@ function EnquiryCard({row,onChanged}:{row:EnquiryRow;onChanged:()=>void}){
  async function loadHistory(){setHistoryBusy(true);setError('');try{setHistory((await api<{events:EnquiryEvent[]}>('?id='+row.id)).events);}catch(e){setError(e instanceof Error?e.message:'Could not load history.');}finally{setHistoryBusy(false);}}
  const data=row.data;
  return <article className="enquiry-card">
-    <span className="tag">{enquiryStatuses[row.status]}</span><h2>{data.name}</h2><p className="muted">Received {dateTime(row.createdAt)} IST · Reference {row.id}</p>
+    <span className="tag">{enquiryStatuses[row.status]}</span><h2>{data.name}</h2><p className="muted">Received {dateTime(row.createdAt)} IST · Confirmation code {enquiryDisplayCode(row.id)}</p>
     {data.venueName&&<p><strong>Venue enquiry:</strong> {data.venueName} · {data.venueLocality} · {data.venueDate}</p>}
     <div className="enquiry-contact">{data.phone&&<a href={'tel:'+data.phone}>{data.phone}</a>}{data.email&&<a href={'mailto:'+data.email}>{data.email}</a>}<strong>Contact by {data.phone?'phone':'email'}</strong></div>
   <dl className="enquiry-facts">

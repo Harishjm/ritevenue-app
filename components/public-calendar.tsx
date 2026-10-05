@@ -4,6 +4,7 @@ import {Dialog,DialogContent,DialogTitle,DialogDescription} from '@/components/u
 import { indiaToday } from "@/lib/venues";
 import { shiftDate, validDate } from "@/lib/booking";
 import { publicDateStatus, type Publication } from "@/lib/publication";
+import {enquiryDisplayCode} from '@/lib/enquiry-code';
 export default function PublicCalendar({
   slug,
   initialCalendar,
@@ -23,7 +24,8 @@ export default function PublicCalendar({
     [busy, setBusy] = useState(false),
     [enquiryDate, setEnquiryDate] = useState(""),
     [enquiryState, setEnquiryState] = useState<"idle" | "sending" | "sent">("idle"),
-    [enquiryError, setEnquiryError] = useState("");
+    [enquiryError, setEnquiryError] = useState(""),
+    [enquiryReference, setEnquiryReference] = useState("");
   async function submitEnquiry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const fields = new FormData(event.currentTarget);
@@ -43,8 +45,10 @@ export default function PublicCalendar({
           consent: fields.get("consent") === "on",
         }),
       });
-      const result = (await response.json()) as { error?: string };
+      const result = (await response.json()) as { error?: string; reference?: string };
       if (!response.ok) throw new Error(result.error || "Could not send your enquiry.");
+      if (!result.reference) throw new Error("Could not confirm your enquiry. Please try again.");
+      setEnquiryReference(result.reference);
       setEnquiryState("sent");
     } catch (e) {
       setEnquiryState("idle");
@@ -150,7 +154,7 @@ export default function PublicCalendar({
           onInteractOutside={event=>{if(enquiryState==='sending')event.preventDefault();}}>
           <DialogTitle>{enquiryState==='sent'?'Enquiry sent':`Enquire about ${enquiryDate}`}</DialogTitle>
           <DialogDescription>{enquiryState==='sent'?'Your enquiry has been received. This does not reserve the venue or date.':'Share your contact details and we’ll confirm availability with you. This is an enquiry, not a booking.'}</DialogDescription>
-          {enquiryState==='sent'?<div className="venue-enquiry-success" role="status"><p>We received your enquiry for {enquiryDate}. We’ll get back to you within 1–2 hours.</p><button type="button" className="filter-button" onClick={()=>setEnquiryDate('')}>Back to calendar</button></div>
+          {enquiryState==='sent'?<div className="venue-enquiry-success" role="status"><p>We received your enquiry for {enquiryDate}. We’ll get back to you within 1–2 hours.</p><p>Your 4-digit confirmation code:<br/><strong className="enquiry-code">{enquiryDisplayCode(enquiryReference)}</strong></p><p>For follow-up, share this code with the name and phone number or email you used.</p><button type="button" className="filter-button" onClick={()=>setEnquiryDate('')}>Back to calendar</button></div>
           :<form className="venue-enquiry-form" onSubmit={submitEnquiry}>
             <fieldset disabled={enquiryState==='sending'}>
               <label>Name<input name="name" required minLength={2} maxLength={100} autoComplete="name"/></label>

@@ -6,7 +6,7 @@ import {DatabaseSync} from 'node:sqlite';
 import assert from 'node:assert/strict';
 
 const root=resolve('.sites-runtime/wedding-enquiry-tests');mkdirSync(root,{recursive:true});writeFileSync(resolve(root,'package.json'),'{"type":"commonjs"}');
-for(const file of ['lib/standard-rentals.ts','lib/venue-capacity.ts','lib/venue-offers.ts','lib/venue-policies.ts','lib/wedding-enquiries.ts','lib/venue-intake.ts','lib/db.ts','lib/auth-core.ts','lib/auth.ts','lib/demo-server.ts','lib/venues.ts','lib/booking.ts','lib/publication.ts','lib/catering.ts','lib/owner-venue.ts','app/api/wedding-enquiries/route.ts']){
+for(const file of ['lib/standard-rentals.ts','lib/venue-capacity.ts','lib/venue-offers.ts','lib/venue-policies.ts','lib/wedding-enquiries.ts','lib/enquiry-code.ts','lib/venue-intake.ts','lib/db.ts','lib/auth-core.ts','lib/auth.ts','lib/demo-server.ts','lib/venues.ts','lib/booking.ts','lib/publication.ts','lib/catering.ts','lib/owner-venue.ts','app/api/wedding-enquiries/route.ts']){
  let source=readFileSync(file,'utf8').replace("import {env} from 'cloudflare:workers';",'const env=globalThis.__weddingEnv;').replace("import {headers} from 'next/headers';",'async function headers(){return new Headers();}').replace("import {redirect} from 'next/navigation';",'function redirect(path){throw new Error("REDIRECT:"+path);}');
  const dest=resolve(root,file.replace(/\.ts$/,'.js'));mkdirSync(dirname(dest),{recursive:true});
  source=source.replace(/(['"])@\//g,(_,quote)=>quote+(relative(dirname(dest),root)||'.')+'/');
@@ -23,7 +23,7 @@ class Statement{
 }
 globalThis.__weddingEnv={RITEVENUE_ADMIN_EMAIL:'admin@example.test',RITEVENUE_AUTH_SECRET:'wedding-test-only-secret-at-least-32-characters',DB:{prepare:text=>new Statement(text),batch:statements=>{sql.exec('BEGIN');try{const results=statements.map(statement=>statement.run());sql.exec('COMMIT');return results;}catch(error){sql.exec('ROLLBACK');throw error;}}}};
 globalThis.fetch=()=>{throw new Error('Unexpected external call');};
-const require=createRequire(resolve(root,'entry.js')),api=require('./app/api/wedding-enquiries/route.js'),{sha256}=require('./lib/auth-core.js'),{planningToday}=require('./lib/wedding-enquiries.js');
+const require=createRequire(resolve(root,'entry.js')),api=require('./app/api/wedding-enquiries/route.js'),{sha256}=require('./lib/auth-core.js'),{planningToday}=require('./lib/wedding-enquiries.js'),{enquiryDisplayCode}=require('./lib/enquiry-code.js');
 const origin='https://ritevenue.test';
 const base={requestKey:crypto.randomUUID(),location:'Jayanagar or JP Nagar',datePreference:'flexible',guests:250,food:'both',help:'complete',planner:'yes',budget:'from_10_20',budgetScope:'whole_wedding',name:'Test couple',phone:'+91 98765 43210',email:'COUPLE@example.test',contactMethod:'whatsapp',consent:true,notes:'Please help with a wheelchair-accessible venue.',source:'instagram',medium:'social',campaign:'wedding_launch'};
 const submit=(data,extra={})=>api.POST(new Request(origin+'/api/wedding-enquiries',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json','cf-connecting-ip':'192.0.2.20',...extra},body:JSON.stringify(data)}));
@@ -32,10 +32,12 @@ const update=(data,cookie='',extra={})=>api.PATCH(new Request(origin+'/api/weddi
 assert.equal((await submit(base,{Origin:'https://other.test'})).status,403);
 for(const change of [{consent:false},{guests:0},{guests:50001},{phone:'--------'},{food:'invalid'},{budgetScope:'unspecified'},{datePreference:'exact',eventDate:'2026-02-30'},{datePreference:'exact',eventDate:'2020-01-01'},{datePreference:'month',eventMonth:'2030-13'},{datePreference:'flexible',eventDate:planningToday()},{website:'spam'},{notes:'x'.repeat(40000)},{status:'booked'}])assert.equal((await submit({...base,...change})).status,400,JSON.stringify(change).slice(0,100));
 const submitted=await submit(base);assert.equal(submitted.status,201);const receipt=await submitted.json();assert.deepEqual(Object.keys(receipt),['reference']);
+assert.match(enquiryDisplayCode(receipt.reference),/^[1-9][0-9]{3}$/);
+assert.throws(()=>enquiryDisplayCode('invalid'));
 assert.equal(submitted.headers.get('Cache-Control'),'private, no-store');
 const stored=sql.prepare('SELECT * FROM wedding_enquiries WHERE id=?').get(receipt.reference),storedData=JSON.parse(stored.data_json);
 assert.equal(storedData.phone,'+919876543210');assert.equal(storedData.email,'couple@example.test');assert.equal(stored.status,'new');assert.equal(stored.consent_version,'wedding-assistance-v1');assert.equal(storedData.source,'instagram');
-assert.equal((await submit(base)).status,200);assert.equal((await submit({...base,guests:300})).status,409);
+const retry=await submit(base);assert.equal(retry.status,200);assert.equal(enquiryDisplayCode((await retry.json()).reference),enquiryDisplayCode(receipt.reference),'The display code stays stable on retry');assert.equal((await submit({...base,guests:300})).status,409);
 const races=await Promise.all(Array.from({length:6},()=>submit({...base,requestKey:base.requestKey})));assert.ok(races.every(result=>result.status===200));assert.equal(sql.prepare('SELECT count(*) n FROM wedding_enquiries').get().n,1);
 // Parallel first submissions using a new key still produce exactly one enquiry.
 const raceKey=crypto.randomUUID();const firstRaces=await Promise.all(Array.from({length:4},()=>submit({...base,requestKey:raceKey},{'cf-connecting-ip':'192.0.2.21'})));const raceReceipts=await Promise.all(firstRaces.map(result=>result.json()));assert.equal(new Set(raceReceipts.map(result=>result.reference)).size,1);

@@ -65,7 +65,8 @@ export default async function Venue({params,searchParams}:{params:Promise<{slug:
    <p>{venue.rentalDetails?.version===2?'The custom details above are published by RiteVenue. Confirm prices and availability directly with the venue.':'Prices and availability have not been confirmed by the venue. Contact the venue directly for a quote.'}</p>
   </section>}
   {venue.rentalDetails&&<CustomCateringSummary policy={venue.cateringPolicy}/>}
-  {venue.authorizationSource==='owner'&&!venue.rentalDetails&&<section className="catering-policy"><div>
+  {venue.authorizationSource==='owner'&&!venue.rentalDetails&&venue.cateringPolicy.customDetailsSource==='not_provided'&&<section className="catering-policy"><div><h2>Catering details</h2><p>Details are not available yet. Please confirm menus, prices and catering rules directly with the venue.</p></div></section>}
+  {venue.authorizationSource==='owner'&&!venue.rentalDetails&&venue.cateringPolicy.customDetailsSource!=='not_provided'&&<section className="catering-policy"><div>
    <h2>{policyLabels[venue.cateringPolicy.mode]}</h2>
    <p>{venue.cateringPolicy.notes||'Ask the venue to confirm its food and outside-caterer rules.'}</p>
    <p>Catering / kitchen fee: {money(venue.cateringPolicy.venueFee/100)} · Minimum food spend: {money(venue.cateringPolicy.minimumFoodSpend/100)}. Catering booking is not offered during this launch.</p>
