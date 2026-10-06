@@ -1,5 +1,5 @@
 import {SITE_ORIGIN} from '@/lib/launch';
-import Link from 'next/link';
+import Link from '@/components/site-link';
 import {notFound} from 'next/navigation';
 import {guides} from '@/lib/guides';
 import {BANGALORE_VENUES_PATH} from '@/lib/venue-collections';

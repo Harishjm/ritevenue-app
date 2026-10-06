@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/site-link';
 import {HeartHandshake,MapPin,MessageCircle,Check} from 'lucide-react';
 import WeddingEnquiryForm from '@/components/wedding-enquiry-form';
 import {SITE_ORIGIN,publicIndexingEnabled} from '@/lib/launch';

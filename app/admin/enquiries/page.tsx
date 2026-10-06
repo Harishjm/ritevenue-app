@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/site-link';
 import {requireAuthenticatedUser,isAdminUser} from '@/lib/auth';
 import WeddingEnquiryInbox from '@/components/wedding-enquiry-inbox';
 import AuthSignOut from '@/components/auth-sign-out';

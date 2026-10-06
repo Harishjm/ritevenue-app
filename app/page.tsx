@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/site-link';
 import WeddingAssistanceBanner from '@/components/wedding-assistance-banner';
 import PublicVenueCard from '@/components/public-venue-card';
 import {publicVenues} from '@/lib/public-venues';

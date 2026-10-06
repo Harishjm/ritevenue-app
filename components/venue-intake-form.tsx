@@ -1,6 +1,6 @@
 'use client';
 /* eslint-disable @next/next/no-img-element -- Local blob previews are already optimized in the browser. */
-import Link from 'next/link';
+import Link from './site-link';
 import {useEffect,useRef,useState,type FormEvent} from 'react';
 import {optimizeVenuePhoto} from '@/lib/optimize-venue-photo';
 import {MAX_VENUE_PHOTOS} from '@/lib/venue-photo';

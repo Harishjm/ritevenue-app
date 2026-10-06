@@ -14,7 +14,7 @@ import {policyLabels} from '@/lib/catering';
 import {matchesVenueUrl} from '@/lib/venue-url';
 import {relatedVenues,venueSeoDescription,venueSeoTitle} from '@/lib/venue-seo';
 import {BANGALORE_VENUES_PATH,isBangaloreVenue} from '@/lib/venue-collections';
-import Link from 'next/link';
+import Link from '@/components/site-link';
 
 export const dynamic='force-dynamic';
 

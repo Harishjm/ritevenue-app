@@ -1,6 +1,6 @@
 'use client';
 import {useCallback,useEffect,useState} from 'react';
-import Link from 'next/link';
+import Link from './site-link';
 import {Checkbox} from '@/components/ui/checkbox';
 import {cateringApi} from '@/lib/catering-client';
 import {supplierSchema,type SupplierDraft,type CateringMenu} from '@/lib/catering';

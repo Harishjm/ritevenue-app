@@ -1,7 +1,7 @@
 'use client';
 
 import {useRef,useState,type FormEvent} from 'react';
-import Link from 'next/link';
+import Link from './site-link';
 import {ArrowRight,CheckCircle2} from 'lucide-react';
 import {budgetOptions,foodOptions,helpOptions,plannerOptions,weddingEnquirySchema} from '@/lib/wedding-enquiries';
 import {enquiryDisplayCode} from '@/lib/enquiry-code';

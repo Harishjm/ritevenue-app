@@ -1,5 +1,5 @@
 "use client";
-import Link from 'next/link';
+import Link from './site-link';
 import {useState,useEffect} from 'react';
 import {MapPin,Users,ArrowUpRight,Search,ShieldCheck,CalendarCheck,Building2,Trees,PartyPopper,Hotel,Flower2} from 'lucide-react';
 import {Select,SelectContent,SelectItem,SelectTrigger,SelectValue} from '@/components/ui/select';

@@ -1,5 +1,5 @@
 import {SITE_ORIGIN} from '@/lib/launch';
-import Link from 'next/link';
+import Link from '@/components/site-link';
 import {ArrowUpRight} from 'lucide-react';
 import {guides} from '@/lib/guides';
 export const metadata={alternates:{canonical:SITE_ORIGIN+'/guides'},title:'Bengaluru wedding venue planning guides',description:'Practical wedding venue planning: compare spaces, understand itemized rental pricing and prepare your Bengaluru venue shortlist.'};

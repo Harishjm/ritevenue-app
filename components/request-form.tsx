@@ -3,7 +3,7 @@ import {useState,useEffect} from 'react';
 import {Checkbox} from '@/components/ui/checkbox';
 import {Pick} from '@/components/explore';
 import {indiaToday,type Venue} from '@/lib/venues';
-import Link from 'next/link';
+import Link from './site-link';
 export default function RequestForm({venue}:{venue:Venue}){
 const [date,setDate]=useState('');const [guests,setGuests]=useState('');const [occasion,setOccasion]=useState(venue.occasions[0]);const [consent,setConsent]=useState(false);const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [receipt,setReceipt]=useState('');const [key,setKey]=useState('');
 useEffect(()=>{const q=new URLSearchParams(window.location.search);setDate(q.get('date')||'');setGuests(q.get('guests')||'');setKey(crypto.randomUUID());},[]);

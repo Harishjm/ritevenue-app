@@ -1,6 +1,6 @@
 "use client";
 import {useState,useEffect} from 'react';
-import Link from 'next/link';
+import Link from './site-link';
 import {MapPin,ImageOff,ArrowUpRight,Upload,Search} from 'lucide-react';
 import type {GoogleVenue} from '@/lib/google-catalog';
 export default function RealVenues(){

@@ -1,5 +1,5 @@
 import {MapPin,ArrowUpRight} from 'lucide-react';
-import Link from 'next/link';
+import Link from './site-link';
 import {BANGALORE_VENUES_PATH} from '@/lib/venue-collections';
 
 export function Header(){return <>

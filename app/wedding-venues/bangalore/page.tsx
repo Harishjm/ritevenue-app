@@ -1,5 +1,5 @@
 import type {Metadata} from 'next';
-import Link from 'next/link';
+import Link from '@/components/site-link';
 import PublicVenueCard from '@/components/public-venue-card';
 import {SITE_ORIGIN,publicIndexingEnabled} from '@/lib/launch';
 import {publicVenues} from '@/lib/public-venues';
