@@ -1,12 +1,37 @@
 # RiteVenue SEO and content plan
 
-Prepared and updated 6 October 2026. The first implementation batch is committed, and the owner reports it has been deployed. No automatic publishing schedule has been activated.
+Prepared 6 October; updated 7 October 2026. The first implementation batch is committed, and the owner reports it has been deployed. The second content batch is implemented locally, pending deployment. No automatic publishing schedule has been activated.
+
+## Resume checkpoint — 7 October 2026
+
+- **9/30 complete (30%), 4 partial, 17 open.** These are work checkpoints, not elapsed calendar days or indexed-page counts.
+- Day 9: added `/guides/banquet-hall-lawn-or-resort`, comparing event layout, backup space, rooms, travel and quote scope. The 150-guest/40-stay example is explicitly hypothetical; no venue rates or facilities were invented. The existing guide directory, related-guide navigation and sitemap discover it automatically; the Bangalore hub also links to it.
+- Day 12: expanded the existing capacity guide with seated versus floating definitions, operator-dependent interpretations, peak simultaneous attendance and dining questions. No competing new URL was created.
+- Guide sitemap entries now use the manually maintained editorial date as `lastModified`. The dates currently represent substantial content changes; do not advance them merely for a review with no content change, a deployment or an automated run.
+- Day 3 is now partial: the live Pergola `www` URL returned HTTP 200 with no redirect, title “The Pergola Venue Wedding Venue in Rajajinagar, Bangalore | RiteVenue”, H1 “The Pergola Venue”, and a canonical to the matching non-www URL. This checks the page's declared identity and canonical, not operator-confirmed facts or Google's chosen canonical. GSC Wizard inspection/audit returned `payment_required` because its trial/subscription is inactive. Use Search Console URL Inspection to finish that check; do not infer a Google canonical from the HTML tag.
+- Validation: TypeScript, targeted lint, production build, existing prototype suite (including production sitemap/staging protection checks), and `git diff --check` passed. No production deployment, Search Console submission or automatic publication was performed in this batch.
+- **Next work:** Day 10, intimate-wedding space and guest-flow guide; then Day 11, simple-wedding decisions. Days 1–2 await operator-verified venue facts. Day 29's downloadable worksheet and the editorial CMS/scheduler remain open work, not completed features.
+
+### Fresh search evidence
+
+GSC SEO & Content Planner read `sc-domain:ritevenue.in` on 7 October with `free_trial_full` access, all countries/devices and no filters. Effective range: **6 September–3 October 2026**; comparison: **9 August–5 September 2026**. Current totals: **4 clicks, 18 impressions, 22.22% CTR, average position 22.06**; comparison totals: zero clicks/impressions, so prior position is not meaningful. Finalized data has an approximately three-day delay and opportunity lists remain empty.
+
+The additional venue-name rows include `pergola bangalore` (one impression, position 54) and `the ritvaan` (one impression, position 88); `nandi link grounds` now has three impressions at position 33.67. This is not sufficient evidence for a new keyword strategy, traffic forecast or CTR diagnosis. Preserve the original baseline below rather than confusing rolling periods with a controlled performance comparison. Day 9 is an exploratory customer-usefulness topic from the approved queue, not a measured search-volume opportunity. The GSC skill kept these recommendations separate from the observed venue-name signals; it did not publish or change account settings.
+
+### Release checklist for this batch
+
+- [x] Day 9 guide and Day 12 capacity update in source.
+- [x] Guide directory, related links, Bangalore hub and sitemap connected.
+- [ ] Deploy through the normal release process.
+- [ ] Open the new guide on production and confirm its canonical URL and sitemap entry.
+- [ ] Inspect the new guide in Search Console; request indexing if eligible. This does not guarantee indexing or ranking.
+- [ ] Finish Pergola's Google-selected canonical check in Search Console.
 
 ## Implementation progress — 6 October 2026
 
 The first batch covers the reusable site work behind Days 1–8 of the queue. A new Bangalore collection reads current approved venue listings and enters the sitemap only when at least three Bangalore/Bengaluru venues are published. Navigation, footer, venue details and the four existing guides now link the discovery and planning paths together. Each guide has new practical comparison questions, a visible editorial review date and Article structured data. The venue page template also directs visitors to relevant checklists.
 
-Venue-specific facts for Lily Pond, Nandi Link Grounds and Pergola remain to be checked against their live records and operators before copy or prices are changed. Pergola's current redirect and Google-selected canonical still need a live check. The admin article editor, content queue, AI-assisted drafts, scheduling, new guides and new locality/type/budget pages are not built yet. The plan below remains the queue for those steps.
+At the end of the first batch, venue-specific facts for Lily Pond, Nandi Link Grounds and Pergola remained to be checked against their live records and operators before copy or prices were changed. Pergola's redirect and Google-selected canonical needed a live check. The admin article editor, content queue, AI-assisted drafts, scheduling, new guides and new locality/type/budget pages were not built. See the 7 October checkpoint above for subsequent progress.
 
 Local verification for this batch: TypeScript check, production build and the prototype test suite passed. Targeted lint completed with no errors; it retains two existing warnings about unoptimized venue images. A post-deployment live audit returned HTTP 200, indexable, and self-canonical for the Bangalore collection; the live sitemap contained it. Search Console had not yet recorded a crawl of that new URL when inspected on 6 October.
 
@@ -107,22 +132,22 @@ Every new brief should record: primary intent; candidate query family and whethe
 
 This is a queue of daily work items, not a requirement to publish 30 articles. Editorial lead is the owner unless otherwise assigned; a venue representative verifies venue-specific facts, and a developer owns technical pages. A blocked item stays a draft. Review published articles after approximately 28 and 56 days; inspect basic crawlability immediately after release.
 
-Status as of 6 October 2026: **7 of 30 complete (23%)**, **4 partly complete**, **19 not started**. “Complete” means the planned page or guide update exists in the code; it does not mean Google has indexed it. A partial item does not count toward the 7.
+Status as of 7 October 2026: **9 of 30 complete (30%)**, **4 partly complete**, **17 not started**. “Complete” means the planned page or guide update exists in the code; it does not mean it is deployed or Google has indexed it. A partial item does not count toward the 9.
 
 | Day | Status | Work item | What is done / still needed |
 | --- | --- | --- | --- |
 | 1 | ◐ Partial | Lily Pond listing | Shared venue-to-guide links added; verify and refresh this venue's specific facts and copy |
 | 2 | ◐ Partial | Nandi Link Grounds listing | Shared venue-to-guide links added; verify and refresh this venue's specific facts and copy |
-| 3 | ☐ Open | Pergola identity and canonical check | Check current redirect, Google-selected canonical and venue identity |
+| 3 | ◐ Partial | Pergola identity and canonical check | Live www page returns 200, no redirect, with non-www canonical and matching venue title/H1; Google-selected canonical and operator identity verification remain pending |
 | 4 | ✅ Done | Bangalore venue collection | Live page built with approved listings, comparison guidance and conditional sitemap inclusion |
 | 5 | ✅ Done | Bengaluru wedding venue checklist | Existing guide expanded with visit questions and internal links |
 | 6 | ✅ Done | Compare an itemized rental quote | Existing guide expanded with a quote comparison worksheet |
 | 7 | ✅ Done | Indoor or outdoor wedding venue | Existing guide expanded with a specific fallback comparison |
 | 8 | ✅ Done | Guest count and venue capacity | Existing guide expanded with layout questions and a worked example |
-| 9 | ☐ Open | Banquet hall, lawn or resort? | Write and review a new comparison guide |
+| 9 | ✅ Done | Banquet hall, lawn or resort? | New comparison guide written, connected to Bangalore hub, guide directory and sitemap; local, pending deployment |
 | 10 | ☐ Open | An intimate Bangalore wedding: space and guest-flow checklist | Write and review a new guide |
 | 11 | ☐ Open | A simple wedding: decide what to keep, simplify or skip | Write and review a new guide |
-| 12 | ◐ Partial | Seating capacity versus floating capacity | Standing/seated difference covered; explain floating capacity explicitly within Day 8 guide |
+| 12 | ✅ Done | Seating capacity versus floating capacity | Existing capacity guide now explains both interpretations of floating, peak attendance and a worked example; local, pending deployment |
 | 13 | ☐ Open | Rajajinagar venue comparison and visit planning | Check inventory, then create a useful collection or guide section |
 | 14 | ✅ Done | A 300-guest event: ceremony and dining layout questions | Worked example added to Day 8 guide |
 | 15 | ☐ Open | What a whole-wedding budget includes | Write and review a new guide |
@@ -210,6 +235,8 @@ For planning, weekly checks catch technical regressions; editorial performance r
 
 ## Sources and evidence
 
+- Authorized GSC SEO & Content Planner planning-data read, 7 October 2026; live public Pergola HTTP headers and HTML title/H1/canonical read the same session. GSC Wizard audit and inspection were unavailable due to subscription status.
+- [Google sitemap last-modified guidance](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap): reflect significant content updates rather than build dates.
 - Authorized GSC Wizard reads: list_sites, get_site_summary, query_top_queries, query_top_pages and list_sitemaps, accessed 6 October 2026.
 - Authorized GSC SEO & Content Planner: list_gsc_properties and get_gsc_seo_planning_data for RiteVenue, accessed 6 October 2026. Its planning method supplied the separation between observed page opportunities and exploratory topics.
 - Local implementation reviewed: `lib/guides.ts`, `lib/venue-seo.ts`, `lib/launch.ts`, `app/guides/[slug]/page.tsx`, `app/sitemap.ts`, `app/robots.ts`, `components/header.tsx`, and `docs/ARCHITECTURE.md`.

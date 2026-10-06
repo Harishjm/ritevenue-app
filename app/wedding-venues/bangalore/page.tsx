@@ -48,6 +48,7 @@ export default async function BangaloreVenues(){
     <Link href="/guides/understand-venue-rental-pricing">Compare rental quotes</Link>
     <Link href="/guides/guest-count-and-venue-capacity">Plan for your guest count</Link>
     <Link href="/guides/indoor-outdoor-wedding-venue">Compare indoor and outdoor spaces</Link>
+    <Link href="/guides/banquet-hall-lawn-or-resort">Choose between a banquet hall, lawn and resort</Link>
    </div>
   </section>
  </main>;
