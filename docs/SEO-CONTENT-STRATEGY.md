@@ -1,6 +1,13 @@
 # RiteVenue SEO and content plan
 
-Prepared 6 October; updated 7 October 2026. The first implementation batch is committed, and the owner reports it has been deployed. The second content batch is implemented locally, pending deployment. No automatic publishing schedule has been activated.
+Prepared 6 October; updated 8 October 2026. The first implementation batch is committed, and the owner reports it has been deployed. The 8 October content changes are local in the `main` working tree; production status of the 7 October batch has not been verified here. No automatic publishing schedule has been activated.
+
+## Resume checkpoint — 8 October 2026
+
+- **10/30 complete (33%), 4 partial, 16 open.** This counts implemented editorial work, not elapsed days, production releases or Google indexing.
+- Day 10: added `/guides/intimate-wedding-venue-bangalore`, covering arrival, ceremony and dining routes, room changeovers, peak attendance, an itemized quote and a hypothetical 60-guest layout. It does not claim that a specific venue offers these facilities or prices.
+- The new guide appears automatically in the guide index, related-guide links and sitemap. The Bangalore collection links to it directly. It remains to be deployed and checked on production.
+- Next in the queue: Day 11, a simple-wedding decision guide. Days 1–2 still require operator-verified listing facts; Day 3 still needs Google's selected canonical and operator identity confirmation.
 
 ## Resume checkpoint — 7 October 2026
 
@@ -132,7 +139,7 @@ Every new brief should record: primary intent; candidate query family and whethe
 
 This is a queue of daily work items, not a requirement to publish 30 articles. Editorial lead is the owner unless otherwise assigned; a venue representative verifies venue-specific facts, and a developer owns technical pages. A blocked item stays a draft. Review published articles after approximately 28 and 56 days; inspect basic crawlability immediately after release.
 
-Status as of 7 October 2026: **9 of 30 complete (30%)**, **4 partly complete**, **17 not started**. “Complete” means the planned page or guide update exists in the code; it does not mean it is deployed or Google has indexed it. A partial item does not count toward the 9.
+Status as of 8 October 2026: **10 of 30 complete (33%)**, **4 partly complete**, **16 not started**. “Complete” means the planned page or guide update exists in the code; it does not mean it is deployed or Google has indexed it. A partial item does not count toward the 10.
 
 | Day | Status | Work item | What is done / still needed |
 | --- | --- | --- | --- |
@@ -145,7 +152,7 @@ Status as of 7 October 2026: **9 of 30 complete (30%)**, **4 partly complete**, 
 | 7 | ✅ Done | Indoor or outdoor wedding venue | Existing guide expanded with a specific fallback comparison |
 | 8 | ✅ Done | Guest count and venue capacity | Existing guide expanded with layout questions and a worked example |
 | 9 | ✅ Done | Banquet hall, lawn or resort? | New comparison guide written, connected to Bangalore hub, guide directory and sitemap; local, pending deployment |
-| 10 | ☐ Open | An intimate Bangalore wedding: space and guest-flow checklist | Write and review a new guide |
+| 10 | ✅ Done | An intimate Bangalore wedding: space and guest-flow checklist | New guide and worked 60-guest layout added; linked from the Bangalore collection; local production check pending |
 | 11 | ☐ Open | A simple wedding: decide what to keep, simplify or skip | Write and review a new guide |
 | 12 | ✅ Done | Seating capacity versus floating capacity | Existing capacity guide now explains both interpretations of floating, peak attendance and a worked example; local, pending deployment |
 | 13 | ☐ Open | Rajajinagar venue comparison and visit planning | Check inventory, then create a useful collection or guide section |
