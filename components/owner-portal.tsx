@@ -32,14 +32,26 @@ async function api<T>(body?:unknown):Promise<T>{
 export default function OwnerPortal({initialVenue,resume=false}:{initialVenue?:string;resume?:boolean}){
  const [dashboard,setDashboard]=useState<Dashboard|null>(null),[editor,setEditor]=useState<Venue|null>(null),[step,setStep]=useState(0),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[saveState,setSaveState]=useState('Saved'),[conflict,setConflict]=useState(false),[uploads,setUploads]=useState<Upload[]>([]),[uploading,setUploading]=useState(false),[reviewNote,setReviewNote]=useState(''),[inviteEmail,setInviteEmail]=useState(''),[inviteNote,setInviteNote]=useState('');
  const [confirmation,setConfirmation]=useState<{name:string;reference:string;updated:boolean}|null>(null),[copyStatus,setCopyStatus]=useState('');
- const current=useRef(editor),saved=useRef(''),inFlight=useRef<Promise<void>|null>(null),started=useRef(false),editorElement=useRef<HTMLDivElement>(null),venueListElement=useRef<HTMLElement>(null),uploadLock=useRef(false),customDetails=useRef<WorkingVenue['rentalDetails']>(null);
+ const [editorVisit,setEditorVisit]=useState(0);
+ const current=useRef(editor),saved=useRef(''),inFlight=useRef<Promise<void>|null>(null),started=useRef(false),stepHeading=useRef<HTMLHeadingElement>(null),venueListElement=useRef<HTMLElement>(null),uploadLock=useRef(false),customDetails=useRef<WorkingVenue['rentalDetails']>(null);
  current.current=editor;
+ const activeVenueId=editor?.id;
+ useEffect(()=>{
+  if(!activeVenueId)return;
+  // Wait for the new step's layout, then move both the viewport and keyboard
+  // focus. Autosaves and photo updates must not reset the owner's position.
+  const frame=requestAnimationFrame(()=>{
+   stepHeading.current?.focus({preventScroll:true});
+   stepHeading.current?.scrollIntoView({behavior:'instant',block:'start'});
+  });
+  return()=>cancelAnimationFrame(frame);
+ },[step,activeVenueId,editorVisit]);
  const reload=useCallback(async()=>{const data=await api<Dashboard>();setDashboard(data);return data;},[]);
  function choose(row:Venue,admin:boolean){
   let data=workingVenueSchema.parse(row.data);
   if(!admin&&data.publication.source==='admin')data={...data,publication:{...data.publication,source:'owner',consent:false,authorizationNote:'',calendar:null,calendarUpdatedAt:null}};
   customDetails.current=data.rentalDetails;saved.current=JSON.stringify(row.data);setEditor({...row,data});setConflict(false);setError('');setNotice('');setStep(row.status==='pending_review'?venueSteps.length-1:0);setUploads([]);setReviewNote('');
-  requestAnimationFrame(()=>editorElement.current?.scrollIntoView({behavior:'smooth',block:'start'}));
+  setEditorVisit(visit=>visit+1);
  }
  useEffect(()=>{
   if(started.current)return;started.current=true;
@@ -106,12 +118,13 @@ export default function OwnerPortal({initialVenue,resume=false}:{initialVenue?:s
   {error&&<p className="error" role="alert">{error}</p>}{notice&&<p className="notice" role="status">{notice}</p>}
   {!dashboard&&!error&&<p role="status">Loading your venues…</p>}
   {dashboard?.invites.map(invite=><div className="notice" key={invite.id}><strong>You’re invited to manage {invite.name||'a venue'}.</strong><button className="filter-button" disabled={busy} onClick={()=>void action({action:'accept',id:invite.id})}>Accept invitation</button></div>)}
-  {editor&&data&&<div className="portal-editor" ref={editorElement}>
+  {editor&&data&&<div className="portal-editor">
    <div className="portal-editor-heading"><div><p className="eyebrow">{ownerStatusLabels[editor.status]}{editor.published?' · Current listing remains live':''}</p><h2>{data.name||'Your new venue'}</h2>{editor.reference&&<p className="portal-reference">Reference: <strong>{editor.reference}</strong></p>}</div><span role="status">{saveState}</span></div>
    {editor.reviewNote&&<aside className="notice"><strong>Review team feedback</strong><p>{editor.reviewNote}</p></aside>}
    {conflict&&<button className="filter-button" onClick={()=>{if(window.confirm('Discard unsaved changes and reload the saved version?'))void reload().then(list=>{const row=list.venues.find(v=>v.id===editor.id);if(row)choose(row,list.admin);});}}>Reload saved version</button>}
    <nav className="portal-steps" aria-label="Venue form steps">{venueSteps.map((label,index)=><button type="button" key={label} aria-current={step===index?'step':undefined} onClick={()=>setStep(index)}>{index+1}. {label}</button>)}</nav>
-   <form onSubmit={e=>{e.preventDefault();setBusy(true);void persist(true).catch(()=>{}).finally(()=>setBusy(false));}}>
+   <form aria-labelledby="venue-step-heading" onSubmit={e=>{e.preventDefault();setBusy(true);void persist(true).catch(()=>{}).finally(()=>setBusy(false));}}>
+    <h3 id="venue-step-heading" className="portal-step-heading" ref={stepHeading} tabIndex={-1}>{venueSteps[step]}</h3>
     <fieldset disabled={locked||conflict} className="portal-fields stack-form">
      {step===0&&<>
       <div className="form-grid"><label>Venue name<input maxLength={100} value={data.name} onChange={e=>change({name:e.target.value})}/></label><label>Venue type<select value={data.type} onChange={e=>change({type:e.target.value})}>{venueTypes.slice(1).map(type=><option key={type}>{type}</option>)}</select></label><label>City<input maxLength={100} value={data.city} onChange={e=>change({city:e.target.value})}/></label><label>Locality<input maxLength={100} value={data.locality} onChange={e=>change({locality:e.target.value})}/></label></div>
@@ -127,7 +140,6 @@ export default function OwnerPortal({initialVenue,resume=false}:{initialVenue?:s
       <VenuePoliciesEditor value={data.policies} onChange={policies=>change({policies})}/>
      </>}
      {step===2&&<>
-      <h3>Venue photos</h3>
       <p className="muted">Add 2–15 photos, then choose the cover image for your listing. Photos stay private until the listing is approved and published.</p>
       <label className="portal-check"><input type="checkbox" checked={data.rightsConfirmed} onChange={e=>change({rightsConfirmed:e.target.checked})}/>I am authorized to provide this venue’s details and photographs.</label>
       <VenuePhotoPicker count={data.images.length} busy={uploading} disabled={!data.rightsConfirmed} completed={uploads.filter(p=>p.state==='done').length} total={uploads.length} onFiles={files=>void uploadFiles(files)}/>

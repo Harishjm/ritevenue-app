@@ -50,6 +50,7 @@ export default async function BangaloreVenues(){
     <Link href="/guides/indoor-outdoor-wedding-venue">Compare indoor and outdoor spaces</Link>
     <Link href="/guides/banquet-hall-lawn-or-resort">Choose between a banquet hall, lawn and resort</Link>
     <Link href="/guides/intimate-wedding-venue-bangalore">Plan an intimate Bangalore wedding</Link>
+    <Link href="/guides/simple-wedding-planning-bangalore">Decide what to keep, simplify or skip</Link>
    </div>
   </section>
  </main>;

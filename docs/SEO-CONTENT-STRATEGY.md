@@ -1,6 +1,36 @@
 # RiteVenue SEO and content plan
 
-Prepared 6 October; updated 8 October 2026. The first implementation batch is committed, and the owner reports it has been deployed. The 8 October content changes are local in the `main` working tree; production status of the 7 October batch has not been verified here. No automatic publishing schedule has been activated.
+Prepared 6 October; updated 9 October 2026. Earlier implementation batches are committed; their current production status has not been independently rechecked in this session. The 9 October content changes are local in the `main` working tree. No automatic publishing schedule has been activated.
+
+## Resume checkpoint — 9 October 2026
+
+- **11/30 complete (37%), 4 partial, 15 open.** These are completed implementation checkpoints, not elapsed days, deployments or Google-indexed pages.
+- Day 11: added `/guides/simple-wedding-planning-bangalore`, with shared priorities, a keep/simplify/skip decision framework, coordination responsibilities, a hypothetical 100-guest example and a final scope checklist. No venue prices, savings or facilities are invented.
+- The guide has a distinct scope from Day 10: deciding what the celebration includes, rather than planning a smaller event's layout. Existing rental and capacity guides retain their own subjects and URLs.
+- Connected through the Bangalore collection and the existing automatic guide directory, related-guide navigation, canonical metadata, Article markup and sitemap. Editorial review date: 9 October 2026. Production deployment and indexing remain unverified.
+- Validation: TypeScript, targeted lint, production build, prototype tests (including sitemap and staging checks), unique guide slugs, collection link and `git diff --check` passed. No production or Search Console changes were made.
+- **Next: Day 13**, verify Rajajinagar inventory, then decide whether there is enough useful coverage for a comparison page or guide section. Day 12 is already complete; do not create another capacity article. Days 1–3 still require the outstanding fact/canonical checks.
+
+### Search evidence and editorial brief
+
+Read GSC SEO & Content Planner on 9 October for `sc-domain:ritevenue.in`, with `free_trial_full` access and no filters. The returned effective range is still **8 September–5 October 2026**, compared with **11 August–7 September 2026**: **8 clicks, 30 impressions, 26.67% CTR, average position 18.47**. The prior period has no clicks or impressions, so its position and percentage growth are not meaningful. The provider reports an approximately three-day finalization delay; this response adds no newer reporting days to the previous session's read.
+
+No returned query establishes demand for a simple-wedding guide. Day 11 remains an **exploratory topic from the user-approved queue**, not a GSC-measured opportunity. The planning skill separates that editorial hypothesis from the small observed venue-name signals. Existing venue refresh priorities remain unchanged.
+
+- Reader/intent: couples deciding which functions and services to include; informational intent is an editorial inference.
+- Candidate query family: simple wedding planning in Bangalore; not observed in the returned GSC rows and not a search-volume claim.
+- Action: add one distinct guide, preserving existing venue and guide URLs.
+- Evidence: original decision framework and explicitly hypothetical example; no real venue, tariff, tradition-specific or legal claims requiring operator confirmation are introduced.
+- Links/CTA: Bangalore venue collection, planning-guide directory and related guides supplied by the existing article template. No specific venue is labelled suitable without verification.
+- Review owner: RiteVenue editorial / site owner. After deployment, check the URL and sitemap; review page/query impressions and clicks after approximately 28 and 56 days. Measure enquiries separately; GSC does not establish conversions.
+
+### Day 11 release checklist
+
+- [x] Guide and contextual Bangalore collection link implemented.
+- [x] Tracker advanced without marking pending venue verification or deployment complete.
+- [ ] Deploy through the normal release process.
+- [ ] Confirm the live article, canonical and sitemap entry.
+- [ ] Check URL Inspection; request indexing if eligible. This is not an indexing guarantee.
 
 ## Resume checkpoint — 8 October 2026
 
@@ -139,7 +169,7 @@ Every new brief should record: primary intent; candidate query family and whethe
 
 This is a queue of daily work items, not a requirement to publish 30 articles. Editorial lead is the owner unless otherwise assigned; a venue representative verifies venue-specific facts, and a developer owns technical pages. A blocked item stays a draft. Review published articles after approximately 28 and 56 days; inspect basic crawlability immediately after release.
 
-Status as of 8 October 2026: **10 of 30 complete (33%)**, **4 partly complete**, **16 not started**. “Complete” means the planned page or guide update exists in the code; it does not mean it is deployed or Google has indexed it. A partial item does not count toward the 10.
+Status as of 9 October 2026: **11 of 30 complete (37%)**, **4 partly complete**, **15 not started**. “Complete” means the planned page or guide update exists in the code; it does not mean it is deployed or Google has indexed it. A partial item does not count toward the 11.
 
 | Day | Status | Work item | What is done / still needed |
 | --- | --- | --- | --- |
@@ -153,7 +183,7 @@ Status as of 8 October 2026: **10 of 30 complete (33%)**, **4 partly complete**,
 | 8 | ✅ Done | Guest count and venue capacity | Existing guide expanded with layout questions and a worked example |
 | 9 | ✅ Done | Banquet hall, lawn or resort? | New comparison guide written, connected to Bangalore hub, guide directory and sitemap; local, pending deployment |
 | 10 | ✅ Done | An intimate Bangalore wedding: space and guest-flow checklist | New guide and worked 60-guest layout added; linked from the Bangalore collection; local production check pending |
-| 11 | ☐ Open | A simple wedding: decide what to keep, simplify or skip | Write and review a new guide |
+| 11 | ✅ Done | A simple wedding: decide what to keep, simplify or skip | New decision guide, hypothetical example and scope checklist; linked from Bangalore collection and existing guide/sitemap system; deployment pending |
 | 12 | ✅ Done | Seating capacity versus floating capacity | Existing capacity guide now explains both interpretations of floating, peak attendance and a worked example; local, pending deployment |
 | 13 | ☐ Open | Rajajinagar venue comparison and visit planning | Check inventory, then create a useful collection or guide section |
 | 14 | ✅ Done | A 300-guest event: ceremony and dining layout questions | Worked example added to Day 8 guide |
