@@ -4,6 +4,7 @@ import {resolve,dirname,relative} from 'node:path';
 import {createRequire} from 'node:module';
 import {DatabaseSync} from 'node:sqlite';
 import assert from 'node:assert/strict';
+import {jpeg} from './photo-fixtures.mjs';
 const root=resolve('.sites-runtime/prototype-tests');mkdirSync(root,{recursive:true});writeFileSync(resolve(root,'package.json'),'{"type":"commonjs"}');
 for(const file of ['lib/standard-rentals.ts','lib/venue-capacity.ts','lib/venue-collections.ts','lib/venue-offers.ts','lib/venue-policies.ts','lib/venue-photo.ts','lib/slugify.ts','lib/venue-url.ts','lib/guides.ts','app/sitemap.ts','lib/venue-image.ts','lib/intake-photo-server.ts','lib/venue-intake.ts','app/api/venue-applications/route.ts','lib/launch.ts','lib/publication.ts','lib/public-venues.ts','app/api/public/[action]/route.ts','lib/venues.ts','lib/catering.ts','lib/catering-server.ts','app/api/catering/[action]/route.ts','lib/booking.ts','lib/owner-venue.ts','lib/db.ts','lib/demo-server.ts','lib/calendar.ts','app/api/demo/[action]/route.ts']){
  let source=readFileSync(file,'utf8').replace("import {env} from 'cloudflare:workers';",'const env=globalThis.__testEnv;');
@@ -12,6 +13,7 @@ for(const file of ['lib/standard-rentals.ts','lib/venue-capacity.ts','lib/venue-
  source=source.replace(/(['"])@\//g,(_,quote)=>quote+(relative(dirname(dest),root)||'.')+'/');
  writeFileSync(dest,ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText);
 }
+writeFileSync(resolve(root,'lib/jpeg-photo.js'),ts.transpileModule(readFileSync('lib/jpeg-photo.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText);
 const sql=new DatabaseSync(':memory:');for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('drizzle/'+file,'utf8'));
 // The package migration changes the index without rewriting existing booking data.
 const migrationDb=new DatabaseSync(':memory:');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')&&!f.startsWith('0003_')).sort())migrationDb.exec(readFileSync('drizzle/'+f,'utf8'));
@@ -204,6 +206,11 @@ assert.equal((await cpost('reserve',cs)).status,404);
 assert.ok(catering.supplierCompatibility(external.policy,{...sample,serviceAreas:['Unknown locality']},external.area,cs.date,100));
 assert.ok(catering.supplierCompatibility(external.policy,sample,external.area,cs.date,sample.maxGuests+1));
 assert.ok(catering.supplierCompatibility(external.policy,sample,external.area,cs.date,0));
+const bothPolicy=catering.policySchema.parse({mode:'in_house_and_external',customDetailsSource:'separate',notes:'In-house menus available; outside caterers allowed.'});
+assert.equal(catering.supplierCompatibility(bothPolicy,sample,external.area,cs.date,100),null,'Both mode permits external caterers without a supplier allowlist');
+assert.ok(catering.supplierCompatibility(bothPolicy,{...sample,serviceAreas:['Unknown locality']},external.area,cs.date,100),'Both mode still checks service areas');
+assert.ok(catering.supplierCompatibility(bothPolicy,sample,external.area,cs.date,sample.maxGuests+1),'Both mode still checks supplier capacity');
+assert.ok(catering.supplierCompatibility(catering.policySchema.parse({mode:'in_house'}),sample,external.area,cs.date,100),'In-house only remains restricted');
 assert.ok(catering.supplierCompatibility(external.policy,sample,external.area,domain.shiftDate(indiaToday(),366),100));
 assert.ok(catering.supplierCompatibility(external.policy,{...sample,availableTo:indiaToday()},external.area,cs.date,100));
 const supplierId=crypto.randomUUID();const supplier={id:supplierId,name:'Test catering business',description:'Owner submitted catering service description for the private review workflow.',contactEmail:'private-supplier@example.test',phone:'9999999999',serviceAreas:[external.area],maxGuests:300,availableFrom:indiaToday(),availableTo:domain.shiftDate(indiaToday(),90),unavailableDates:[],menus:[{...menu,id:'owner-menu'}],images:[],rightsConfirmed:true,submit:false};
@@ -432,6 +439,12 @@ const photoConversion=await post('convert_intake',{id:photoReference});assert.eq
 const photoDraft=JSON.parse(sql.prepare('SELECT data_json FROM owner_drafts WHERE id=?').get(photoDraftId).data_json);assert.deepEqual(photoDraft.images,[photoRecord.id]);assert.equal(photoDraft.publication.consent,false);assert.equal(photoDraft.rightsConfirmed,false);assert.equal((await pget('image','?id='+photoRecord.id)).status,404);
 assert.equal(sql.prepare('SELECT owner_id FROM owner_images WHERE id=?').get(photoRecord.id).owner_id,'admin');assert.equal((await get('image','?id='+photoRecord.id)).status,200);
 assert.equal((await post('convert_intake',{id:photoReference})).status,200);
+const jpegResponse=await submitPhotos({...photoIntake,requestKey:crypto.randomUUID()},[new File([jpeg],'photo.jpg',{type:'image/jpeg'})],'192.0.2.88');assert.equal(jpegResponse.status,201);
+const jpegReference=(await jpegResponse.json()).reference,jpegRecord=sql.prepare('SELECT * FROM intake_photos WHERE intake_id=?').get(jpegReference);
+assert.match(jpegRecord.object_key,/\.jpg$/);assert.equal((await readIntakePhoto(jpegRecord.id)).headers.get('Content-Type'),'image/jpeg');
+assert.equal((await post('convert_intake',{id:jpegReference})).status,201);
+assert.equal(sql.prepare('SELECT content_type FROM owner_images WHERE id=?').get(jpegRecord.id).content_type,'image/jpeg');
+assert.equal((await get('image','?id='+jpegRecord.id)).headers.get('Content-Type'),'image/jpeg');
 const adminRights={consent:true,source:'admin',authorizationNote:'RiteVenue created and independently licensed these venue photographs.',calendar:null,calendarUpdatedAt:null};
 assert.equal((await post('drafts',{...photoDraft,rightsConfirmed:true,submit:true,publication:adminRights})).status,400,'Private application photos cannot become admin-direct public photos');
 const directUpload=await api.POST(new Request(origin+'/api/demo/images',{method:'POST',headers:{Origin:origin,'Content-Type':'image/jpeg'},body:bytes}),{params:Promise.resolve({action:'images'})});assert.equal(directUpload.status,201);

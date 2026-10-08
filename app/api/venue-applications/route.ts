@@ -1,4 +1,5 @@
 import {db} from '@/lib/db';
+import {storedPhotoType} from '@/lib/venue-photo';
 import {readBody,apiUser,isAdmin,apiError} from '@/lib/demo-server';
 import {intakeSchema,intakeHeaders,digest} from '@/lib/venue-intake';
 import {submitPhotoIntake,intakeBucket,inboxPhotoRows,photoSummary} from '@/lib/intake-photo-server';
@@ -38,7 +39,7 @@ export async function GET(request?:Request){try{
  if(photoId){
   const photo=await db().prepare("SELECT p.object_key FROM intake_photos p JOIN public_venue_intakes i ON i.id=p.intake_id WHERE p.id=? AND i.status!='uploading'").bind(photoId).first<{object_key:string}>();
   if(!photo)throw new Error('NOT_FOUND');const object=await intakeBucket().get(photo.object_key);if(!object)throw new Error('NOT_FOUND');
-  return new Response(object.body,{headers:{...intakeHeaders,'Content-Type':'image/webp','Content-Security-Policy':"default-src 'none'",'X-Robots-Tag':'noindex, nofollow'}});
+  return new Response(object.body,{headers:{...intakeHeaders,'Content-Type':storedPhotoType(photo.object_key),'Content-Security-Policy':"default-src 'none'",'X-Robots-Tag':'noindex, nofollow'}});
  }
  const rows=await db().prepare("SELECT id,data_json,status,converted_draft_id,review_note,reviewed_at,created_at FROM public_venue_intakes WHERE status!='uploading' ORDER BY created_at DESC LIMIT 100").all<{id:string;data_json:string;status:string;converted_draft_id:string|null;review_note:string;reviewed_at:string|null;created_at:string}>();
  const photos=await inboxPhotoRows();

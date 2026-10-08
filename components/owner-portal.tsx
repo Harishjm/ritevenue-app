@@ -75,7 +75,7 @@ export default function OwnerPortal({initialVenue,resume=false}:{initialVenue?:s
  async function uploadPhoto(item:Upload,venueId:string){
   setUploads(list=>list.map(photo=>photo.id===item.id?{...photo,state:'uploading',error:undefined}:photo));
   try{
-   const optimized=await optimizeVenuePhoto(item.file),response=await fetch(`/api/owner/photos?venue=${venueId}&photo=${item.id}`,{method:'POST',headers:{'Content-Type':'image/webp'},body:optimized.blob});
+   const optimized=await optimizeVenuePhoto(item.file),response=await fetch(`/api/owner/photos?venue=${venueId}&photo=${item.id}`,{method:'POST',headers:{'Content-Type':optimized.blob.type},body:optimized.blob});
    const result=await response.json() as {error?:string};if(!response.ok)throw new Error(result.error||'Upload failed.');
    setEditor(row=>row?.id===venueId?{...row,data:{...row.data,images:Array.from(new Set([...row.data.images,item.id]))}}:row);
    setUploads(list=>list.map(photo=>photo.id===item.id?{...photo,state:'done'}:photo));

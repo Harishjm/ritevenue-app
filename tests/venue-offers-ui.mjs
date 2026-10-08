@@ -46,6 +46,14 @@ sourceSelect.props.onChange({target:{value:'not_provided'}});assert.deepEqual(ch
 html=renderToStaticMarkup(React.createElement(CateringEditor,{value:noCatering,onChange:()=>{},allowMainCustomDetails:false}));assert.ok(!html.includes('Already included in the main custom venue details'));
 html=renderToStaticMarkup(React.createElement(CateringSummary,{policy:policySchema.parse({mode:'in_house',notes:'<script>do not execute</script>'})}));assert.match(html,/In-house catering only/);assert.ok(!html.includes('<script>'));assert.match(html,/&lt;script&gt;/);
 console.log('Passed custom catering UI: explicit missing/main-text/separate choices, multiline per-plate notes, neutral legacy fallback, no default zero-fee/supplier labels, and escaped public notes.');
+const arrangementSelect=descendants(CateringEditor({value:customPolicy,onChange:next=>{changedPolicy=next;}})).filter(node=>node.type==='select')[1];
+arrangementSelect.props.onChange({target:{value:'in_house_and_external'}});
+const bothCatering=policySchema.parse(changedPolicy);
+assert.equal(bothCatering.mode,'in_house_and_external');assert.equal(bothCatering.notes,customPolicy.notes);assert.equal(bothCatering.customDetailsSource,'separate');
+html=renderToStaticMarkup(React.createElement(CateringEditor,{value:bothCatering,onChange:()=>{}}));
+assert.match(html,/<option value="in_house_and_external" selected="">Both in-house and external catering allowed<\/option>/);assert.match(html,/which prices apply to in-house catering/);
+html=renderToStaticMarkup(React.createElement(CateringSummary,{policy:bothCatering}));
+assert.match(html,/Both in-house and external catering allowed/);assert.match(html,/Veg: ₹850/);assert.ok(!html.includes('not confirmed'));
 console.log('Passed flexible offer UI: custom times, quantities vs charges, unknown values, GST labels and hidden admin-direct prices.');
 const previewModule=require('./components/venue-card-preview.js'),Preview=previewModule.default;
 const photos=Array.from({length:15},(_,i)=>'/public-photo-'+i+'.webp');

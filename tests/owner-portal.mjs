@@ -4,6 +4,7 @@ import {resolve,dirname,relative} from 'node:path';
 import {createRequire} from 'node:module';
 import {DatabaseSync} from 'node:sqlite';
 import assert from 'node:assert/strict';
+import {jpeg} from './photo-fixtures.mjs';
 
 const root=resolve('.sites-runtime/owner-portal-tests');mkdirSync(root,{recursive:true});writeFileSync(resolve(root,'package.json'),'{"type":"commonjs"}');
 const files=[...readdirSync('lib').filter(f=>f.endsWith('.ts')).map(f=>'lib/'+f),'app/api/owner/route.ts','app/api/owner/photos/route.ts','app/api/demo/[action]/route.ts'];
@@ -36,17 +37,25 @@ assert.equal((await save(a,a.data,true)).status,400);assert.equal((await save(a,
 assert.equal((await save(a,{...a.data,publication:{...a.data.publication,source:'admin'}})).status,403);
 // A header-valid fixture exercises upload validation; browser tests exercise actual decoding.
 const webp=new Uint8Array(30);webp.set(Buffer.from('RIFF'));webp.set(Buffer.from('WEBPVP8 '),8);const view=new DataView(webp.buffer);view.setUint32(4,22,true);view.setUint32(16,10,true);webp.set([0x9d,1,0x2a],23);view.setUint16(26,2,true);view.setUint16(28,2,true);
-const upload=(venue,id,user='alice',bytes=webp)=>photos.POST(new Request(origin+`/api/owner/photos?venue=${venue}&photo=${id}`,{method:'POST',headers:{origin,Cookie:cookies[user]||'','Content-Type':'image/webp'},body:bytes}));
+const upload=(venue,id,user='alice',bytes=webp,type='image/webp')=>photos.POST(new Request(origin+`/api/owner/photos?venue=${venue}&photo=${id}`,{method:'POST',headers:{origin,Cookie:cookies[user]||'','Content-Type':type},body:bytes}));
 const image=async(id,user='alice')=>photos.GET(req('/api/owner/photos?photo='+id,undefined,user));
 const imageIds=[crypto.randomUUID(),crypto.randomUUID()];
 assert.equal((await upload(a.id,imageIds[0],'bob')).status,404);
 assert.equal((await upload(a.id,imageIds[0],'alice',new Uint8Array(360000))).status,413);
 assert.equal((await upload(a.id,imageIds[0],'alice',new Uint8Array(30))).status,400);
 failUpload=true;assert.equal((await upload(a.id,imageIds[0])).status,503);failUpload=false;
-assert.equal((await upload(a.id,imageIds[0])).status,201);assert.equal((await upload(a.id,imageIds[1])).status,201);assert.equal(objects.size,2);
+assert.equal((await upload(a.id,imageIds[0],'alice',jpeg)).status,400,'JPEG bytes cannot be uploaded as WebP');
+assert.equal((await upload(a.id,imageIds[0],'alice',webp,'image/jpeg')).status,400,'WebP bytes cannot be uploaded as JPEG');
+assert.equal((await upload(a.id,imageIds[0])).status,201);assert.equal((await upload(a.id,imageIds[1],'alice',jpeg,'image/jpeg')).status,201);assert.equal(objects.size,2);
+assert.equal((await image(imageIds[1])).headers.get('Content-Type'),'image/jpeg');
+assert.equal(sql.prepare('SELECT content_type FROM owner_images WHERE id=?').get(imageIds[1]).content_type,'image/jpeg');
+assert.match(sql.prepare('SELECT stored_filename FROM venue_photo WHERE id=?').get(imageIds[1]).stored_filename,/\.jpg$/);
+assert.equal((await upload(a.id,imageIds[1],'alice',jpeg,'image/jpeg')).status,200,'JPEG retries are idempotent');
 assert.equal((await upload(a.id,imageIds[0])).status,200);assert.equal(objects.size,2);assert.equal((await image(imageIds[0],'bob')).status,404);assert.equal((await image(imageIds[0],'anonymous')).status,401);assert.equal((await image(imageIds[0])).headers.get('Cache-Control'),'private, no-store');
 const racedPhoto=crypto.randomUUID();const raceUploads=await Promise.all([upload(a.id,racedPhoto),upload(a.id,racedPhoto)]);assert.ok(raceUploads.every(r=>[200,201].includes(r.status)));assert.equal(objects.size,3);assert.equal(sql.prepare('SELECT count(*) n FROM owner_images WHERE id=?').get(racedPhoto).n,1);
 const valid={...newWorkingVenue(),name:'Test owner hall',city:'Bengaluru',locality:'Rajajinagar',address:'12 Test road, Rajajinagar, Bengaluru',capacity:500,description:'A spacious venue with a covered hall and gardens for wedding celebrations.',policies:'Outside catering allowed.\n\nMusic must end by 11 PM.',contactName:'Alice Owner',phone:'+91 98765 43210',rentalDetails:{version:2,text:'Full day rental: INR 70,000 including GST. Tables, chairs and power included.'},images:imageIds,rightsConfirmed:true,publication:{...a.data.publication,consent:true}};
+valid.cateringPolicy={...valid.cateringPolicy,mode:'in_house_and_external',customDetailsSource:'separate',notes:'In-house veg menu: ₹800 per person. Outside caterers are also allowed.'};
+await body(await save(a,valid));a=await current(a.id);assert.deepEqual(a.data.cateringPolicy,valid.cateringPolicy,'Both catering mode survives saving and reopening a draft');
 const customMixed={...valid,pricing:{...valid.pricing,marriageRent:10000},packageAvailability:{rent:'available',marriageRent:'not_applicable',morningRent:'available',eveningRent:'available'}};
 assert.ok(Object.values(submissionVenue(a.id,customMixed).pricing).every(price=>price===0));
 assert.equal(submissionVenue(a.id,customMixed).rentalDetails.text,valid.rentalDetails.text);
@@ -59,6 +68,7 @@ await body(await review(a,'changes_requested'));a=await current(a.id);assert.equ
 await body(await save(a,valid,true));a=await current(a.id);const firstPublishedRevision=a.revision;
 await body(await review(a));assert.equal((await review(a)).status,409);a=await current(a.id);assert.equal(a.status,'published');assert.equal((await publicVenues())[0].name,valid.name);assert.equal((await publicVenues())[0].policies,valid.policies);
 const publishedJson=sql.prepare('SELECT data_json FROM owner_drafts WHERE id=?').get(a.id).data_json;assert.equal(JSON.parse(publishedJson).contactName,undefined);assert.equal(JSON.parse(publishedJson).phone,undefined);
+assert.deepEqual((await publicVenues())[0].cateringPolicy,valid.cateringPolicy,'Both catering mode and menu notes survive review and publication');
 const edited={...valid,name:'Updated owner hall',policies:'Revised policy: outside catering requires approval.',images:[imageIds[1],imageIds[0]]};await body(await save(a,edited));a=await current(a.id);assert.equal(a.status,'draft');assert.equal(sql.prepare('SELECT data_json FROM owner_drafts WHERE id=?').get(a.id).data_json,publishedJson);assert.equal((await publicVenues())[0].policies,valid.policies,'Policy edits stay private until approved');
 assert.equal((await body(await save(a,edited,true))).reference,firstSubmit.reference,'Renaming and resubmitting must keep the original reference');a=await current(a.id);await body(await review(a,'rejected'));assert.equal(sql.prepare('SELECT data_json FROM owner_drafts WHERE id=?').get(a.id).data_json,publishedJson);a=await current(a.id);
 await body(await save(a,edited,true));a=await current(a.id);const withdrawnRevision=a.revision;await body(await post({action:'withdraw',id:a.id,revision:a.revision}));assert.equal((await review(a)).status,409);a=await current(a.id);

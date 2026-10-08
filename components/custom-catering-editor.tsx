@@ -20,6 +20,7 @@ export default function CustomCateringEditor({value,onChange,allowMainCustomDeta
    <label>Catering arrangement<select value={value.mode} onChange={e=>onChange({...value,mode:e.target.value as CateringPolicy['mode'],supplierIds:[],customDetailsSource:'separate'})}>
     {Object.entries(policyLabels).map(([mode,label])=><option value={mode} key={mode}>{label}</option>)}
    </select></label>
+   {value.mode==='in_house_and_external'&&<p className="muted">Guests can choose the venue’s in-house catering or bring an outside caterer. In the notes, specify which prices apply to in-house catering and any charges or conditions for outside caterers.</p>}
    <label>Menu, per-plate prices & catering notes<textarea rows={5} maxLength={700} value={value.notes} placeholder={'Veg menu: ₹850 + 18% GST per person\nNon-veg menu: ₹1,400 + 18% GST per person\nAdd serving style, minimum guests and other charges if applicable.'} onChange={e=>onChange({...value,notes:e.target.value,customDetailsSource:'separate'})}/></label>
    <p className="muted">These notes will appear on the listing after publication.</p>
   </>}

@@ -226,7 +226,7 @@ export default function OwnerWorkspace({
         const response = await fetch("/api/demo/images", {
           method: "POST",
           headers: {
-            "Content-Type": "image/webp",
+            "Content-Type": optimized.blob.type,
             "X-Venue-Id": draft.id,
             "X-Venue-Name": draft.name,
             "X-Venue-Locality": draft.locality,

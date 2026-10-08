@@ -3,7 +3,7 @@ import {db} from '@/lib/db';
 import {AuthError,consumeRate} from '@/lib/auth';
 import {portalUser,workspace} from '@/lib/owner-portal-server';
 import {intakeBucket} from '@/lib/intake-photo-server';
-import {inspectOptimizedPhoto,MAX_PHOTO_BYTES} from '@/lib/venue-photo';
+import {inspectOptimizedPhoto,MAX_PHOTO_BYTES,photoExtension} from '@/lib/venue-photo';
 import {venueImageFilename,venueImageAlt} from '@/lib/venue-image';
 import {portalError,portalJson,portalHeaders} from '../route';
 export const dynamic='force-dynamic';
@@ -21,13 +21,14 @@ export async function POST(request:Request){try{
  const existing=await db().prepare('SELECT venue_id,ready FROM owner_portal_photos WHERE id=?').bind(id).first<{venue_id:string;ready:number}>();
  if(existing&&existing.venue_id!==venue)throw new AuthError(403,'Photo belongs to another venue.');
  if(existing?.ready===1)return portalJson({id});
- if(request.headers.get('content-type')!=='image/webp')throw new AuthError(400,'Use the photo picker to optimize this image.');
+ const type=request.headers.get('content-type');
+ if(type!=='image/webp'&&type!=='image/jpeg')throw new AuthError(400,'Use the photo picker to optimize this image.');
  const reader=request.body?.getReader();if(!reader)throw new AuthError(400,'Empty upload.');
  const chunks:Uint8Array[]=[];let size=0;
  try{for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>MAX_PHOTO_BYTES){await reader.cancel();throw new AuthError(413,'Photo must be at most 350 KB after optimization.');}chunks.push(value);}}finally{reader.releaseLock();}
  const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
- try{inspectOptimizedPhoto(bytes);}catch(error){throw new AuthError(400,(error as Error).message);}
- const data=JSON.parse(row.data_json),filename=venueImageFilename(data.name||'venue',data.locality||'location',data.city||'city',1).replace('.webp',`-${id}.webp`),key=`owner-portal/${venue}/${id}/${crypto.randomUUID()}/${filename}`,stamp=new Date().toISOString();
+ try{inspectOptimizedPhoto(bytes,type);}catch(error){throw new AuthError(400,(error as Error).message);}
+ const extension=photoExtension(type),data=JSON.parse(row.data_json),filename=venueImageFilename(data.name||'venue',data.locality||'location',data.city||'city',1,extension).replace(`.${extension}`,`-${id}.${extension}`),key=`owner-portal/${venue}/${id}/${crypto.randomUUID()}/${filename}`,stamp=new Date().toISOString();
  await db().prepare('INSERT INTO owner_portal_photos(id,venue_id,uploaded_by,object_key,created_at) SELECT ?,?,?,?,? WHERE (SELECT count(*) FROM owner_portal_photos WHERE venue_id=?)<150 ON CONFLICT(id) DO NOTHING').bind(id,venue,user.userId,key,stamp,venue).run();
  const reserved=await db().prepare('SELECT object_key,venue_id,ready FROM owner_portal_photos WHERE id=?').bind(id).first<{object_key:string;venue_id:string;ready:number}>();
  if(!reserved)throw new AuthError(429,'Photo storage limit reached for this venue. Contact the RiteVenue team.');
@@ -35,10 +36,10 @@ export async function POST(request:Request){try{
  if(reserved.ready===1)return portalJson({id});
  // Each attempt writes a new object. Only one can finalize the ID; retries never overwrite a live image.
  try{
-  await intakeBucket().put(key,bytes,{httpMetadata:{contentType:'image/webp'}});
+  await intakeBucket().put(key,bytes,{httpMetadata:{contentType:type}});
   const result=await db().batch([
    db().prepare('UPDATE owner_portal_photos SET ready=1,object_key=? WHERE id=? AND ready=0').bind(key,id),
-   db().prepare('INSERT INTO owner_images(id,owner_id,object_key,content_type,created_at) SELECT id,?,object_key,\'image/webp\',? FROM owner_portal_photos WHERE id=? AND object_key=? AND ready=1 ON CONFLICT(id) DO NOTHING').bind(row.created_by,stamp,id,key),
+   db().prepare('INSERT INTO owner_images(id,owner_id,object_key,content_type,created_at) SELECT id,?,object_key,?,? FROM owner_portal_photos WHERE id=? AND object_key=? AND ready=1 ON CONFLICT(id) DO NOTHING').bind(row.created_by,type,stamp,id,key),
    db().prepare('INSERT INTO venue_photo(id,venue_id,stored_filename,alt_text,display_order) SELECT id,venue_id,?,?,(SELECT COALESCE(MAX(display_order),0)+1 FROM venue_photo WHERE venue_id=?) FROM owner_portal_photos WHERE id=? AND object_key=? AND ready=1 ON CONFLICT(id) DO NOTHING').bind(filename,venueImageAlt(data.name||'Venue',data.locality||'',data.city||'',1),venue,id,key)
   ]);
   if(!result[0].meta.changes)await intakeBucket().delete(key);

@@ -3,7 +3,7 @@
 import Link from './site-link';
 import {useEffect,useRef,useState,type FormEvent} from 'react';
 import {optimizeVenuePhoto} from '@/lib/optimize-venue-photo';
-import {MAX_VENUE_PHOTOS} from '@/lib/venue-photo';
+import {MAX_VENUE_PHOTOS,photoExtension} from '@/lib/venue-photo';
 import {venueTypes} from '@/lib/venues';
 import VenueCapacityFields from '@/components/venue-capacity-fields';
 import type {CapacityDetails} from '@/lib/venue-capacity';
@@ -30,7 +30,7 @@ export default function VenueIntakeForm(){
   const form=new FormData(event.currentTarget);if(!key.current)key.current=crypto.randomUUID();
     const application={requestKey:key.current,venueName:form.get('venueName'),city:form.get('city'),locality:form.get('locality'),venueType:form.get('venueType'),contactName:form.get('contactName'),email:form.get('email'),phone:form.get('phone'),capacity:guestCapacity.capacity,capacityDetails:guestCapacity.capacityDetails,notes:form.get('notes'),consent:form.get('consent')==='on',website:form.get('website'),photoDescriptions:photos.map(photo=>photo.description),photoConsent:photos.length>0&&form.get('photoConsent')==='on'};
   const multipart=new FormData();multipart.append('application',JSON.stringify(application));
-  photos.forEach((photo,index)=>multipart.append('photos',photo.blob,'venue-photo-'+(index+1)+'.webp'));
+  photos.forEach((photo,index)=>multipart.append('photos',photo.blob,'venue-photo-'+(index+1)+'.'+photoExtension(photo.blob.type)));
   try{
    const response=await fetch('/api/venue-applications',{method:'POST',...(photos.length?{body:multipart}:{headers:{'Content-Type':'application/json'},body:JSON.stringify(application)})});
    const result=await response.json() as {error?:string;reference?:string};
