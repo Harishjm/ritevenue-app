@@ -7,6 +7,13 @@
 .collection-list{margin:26px 0 54px}
 .collection-areas{color:#52645a;line-height:1.6;margin:0 0 24px}
 .collection-areas strong{color:#183e34}
+.collection-area-advice{margin:0 0 54px;padding:28px;border:1px solid var(--border);border-radius:12px;background:#fff}
+.collection-area-advice h2{font-family:Georgia,serif;font-size:30px;font-weight:400;color:#183e34}
+.collection-area-advice p{max-width:850px;line-height:1.7;color:#52645a}
+.collection-area-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:22px 0}
+.collection-area-links a{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:16px;border:1px solid #cdded0;border-radius:8px;color:#155c49;font-weight:700}
+.collection-area-links a:hover{background:#eaf3ed}
+.collection-area-links span{font-size:14px;font-weight:600;white-space:nowrap}
 .collection-advice{max-width:900px;padding:30px;border-radius:12px;background:#f3f7f3}
 .collection-advice h2{font-family:Georgia,serif;font-size:30px;font-weight:400;color:#183e34}
 .collection-advice p{line-height:1.75;color:#52645a}
@@ -31,4 +38,4 @@
 .venue-planning-links a{padding:10px 14px;border:1px solid #cdded0;border-radius:6px;background:white;color:#155c49;font-weight:600}
 @media(max-width:1000px){.seo-footer .footer-link-groups{grid-template-columns:repeat(2,minmax(135px,1fr));margin-left:0;width:100%;flex-basis:100%}}
 @media(max-width:1100px){.site-header{flex-wrap:wrap}.site-header nav{flex-wrap:wrap;justify-content:flex-end}}
-@media(max-width:700px){.collection-facts,.collection-guide-links{grid-template-columns:1fr}.collection-advice{padding:22px}.collection-intro{font-size:16px}.seo-footer .footer-link-groups{gap:24px 18px}.site-header nav{gap:12px;width:100%;justify-content:flex-start}}
+@media(max-width:700px){.collection-facts,.collection-guide-links,.collection-area-links{grid-template-columns:1fr}.collection-area-advice,.collection-advice{padding:22px}.collection-intro{font-size:16px}.seo-footer .footer-link-groups{gap:24px 18px}.site-header nav{gap:12px;width:100%;justify-content:flex-start}}

@@ -1,6 +1,13 @@
 # RiteVenue SEO and content plan
 
-Prepared 6 October; updated 9 October 2026. Earlier implementation batches are committed; their current production status has not been independently rechecked in this session. The 9 October content changes are local in the `main` working tree. No automatic publishing schedule has been activated.
+Prepared 6 October; updated 11 October 2026. Earlier implementation batches are committed, and the live Bangalore collection links to the Day 11 guide. The Day 13 section below is local and awaits deployment. No automatic publishing schedule has been activated.
+
+## Resume checkpoint — 11 October 2026
+
+- **12/30 complete (40%), 4 partial, 14 open.** This is implementation progress, not elapsed days, deployed pages or Google indexing.
+- Day 13: the live Bangalore collection showed 11 published listings, including exactly two in Rajajinagar: The Pergola Venue and Chaitanya Convention Centre. A standalone Rajajinagar collection would be thin under our three-listing launch rule, so the existing city collection now has a conditional Rajajinagar visit-planning section. Its links and count use the current approved listing data, and the section appears only while at least two relevant venues are published. No additional indexable URL was created.
+- Search Console's latest finalized window for `sc-domain:ritevenue.in` is **10 September–7 October 2026** (comparison: **13 August–9 September**), all countries and devices: **10 clicks, 41 impressions, 24.39% CTR, average position 23.37**. The prior window had zero clicks and impressions, so percentage growth and position change are not meaningful. Search Console reports an approximately three-day data delay. The Bangalore collection had **2 clicks and 9 impressions**; `wedding venues in bangalore` had **one impression** at average position 58. Those small counts do not establish a trend or justify many area pages. The returned high-confidence opportunity lists were empty.
+- **Next: Day 15**, a guide explaining the scope of a whole-wedding budget. Keep Days 16–17 scenario worksheets separate until their assumptions can be researched. Days 1–3 still need venue/operator and Google canonical checks; Day 13 still needs deployment and a live link check.
 
 ## Resume checkpoint — 9 October 2026
 
@@ -169,7 +176,7 @@ Every new brief should record: primary intent; candidate query family and whethe
 
 This is a queue of daily work items, not a requirement to publish 30 articles. Editorial lead is the owner unless otherwise assigned; a venue representative verifies venue-specific facts, and a developer owns technical pages. A blocked item stays a draft. Review published articles after approximately 28 and 56 days; inspect basic crawlability immediately after release.
 
-Status as of 9 October 2026: **11 of 30 complete (37%)**, **4 partly complete**, **15 not started**. “Complete” means the planned page or guide update exists in the code; it does not mean it is deployed or Google has indexed it. A partial item does not count toward the 11.
+Status as of 11 October 2026: **12 of 30 complete (40%)**, **4 partly complete**, **14 not started**. “Complete” means the planned page or guide update exists in the code; it does not mean it is deployed or Google has indexed it. A partial item does not count toward the 12.
 
 | Day | Status | Work item | What is done / still needed |
 | --- | --- | --- | --- |
@@ -185,7 +192,7 @@ Status as of 9 October 2026: **11 of 30 complete (37%)**, **4 partly complete**,
 | 10 | ✅ Done | An intimate Bangalore wedding: space and guest-flow checklist | New guide and worked 60-guest layout added; linked from the Bangalore collection; local production check pending |
 | 11 | ✅ Done | A simple wedding: decide what to keep, simplify or skip | New decision guide, hypothetical example and scope checklist; linked from Bangalore collection and existing guide/sitemap system; deployment pending |
 | 12 | ✅ Done | Seating capacity versus floating capacity | Existing capacity guide now explains both interpretations of floating, peak attendance and a worked example; local, pending deployment |
-| 13 | ☐ Open | Rajajinagar venue comparison and visit planning | Check inventory, then create a useful collection or guide section |
+| 13 | ✅ Done | Rajajinagar venue comparison and visit planning | Two live listings verified; conditional visit-planning section and direct listing links added to the Bangalore collection, locally pending deployment; no thin standalone area URL |
 | 14 | ✅ Done | A 300-guest event: ceremony and dining layout questions | Worked example added to Day 8 guide |
 | 15 | ☐ Open | What a whole-wedding budget includes | Write and review a new guide |
 | 16 | ☐ Open | ₹5 lakh scenario worksheet | Research assumptions and add to Day 15 guide |

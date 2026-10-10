@@ -24,6 +24,7 @@ export default async function BangaloreVenues(){
  let unavailable=false;
  try{venues=bangaloreVenues(await publicVenues());}catch{unavailable=true;}
  const areas=Array.from(new Set(venues.map(venue=>venue.area.trim()).filter(Boolean))).sort((a,b)=>a.localeCompare(b));
+ const rajajinagarVenues=venues.filter(venue=>venue.area.trim().toLowerCase()==='rajajinagar');
  return <main className="content-page city-collection">
   <nav className="breadcrumb" aria-label="Breadcrumb"><Link href="/">Explore venues</Link><span>/</span><span>Bangalore</span></nav>
   <p className="eyebrow">BANGALORE · BENGALURU</p>
@@ -39,6 +40,13 @@ export default async function BangaloreVenues(){
    {areas.length>0&&<p className="collection-areas"><strong>Areas currently listed:</strong> {areas.join(' · ')}</p>}
    {venues.length?<div className="venue-grid">{venues.map(venue=><PublicVenueCard key={venue.slug} venue={venue}/>)}</div>:<div className="public-empty"><p>{unavailable?'Please try again shortly.':'Our published collection is growing. Tell us your guest count and area, and we can help you begin a shortlist.'}</p><Link className="primary" href="/plan-your-wedding">Get wedding planning help</Link></div>}
   </section>
+  {rajajinagarVenues.length>=2&&<section className="collection-area-advice" aria-labelledby="rajajinagar-title">
+   <p className="eyebrow">PLAN A RAJAJINAGAR VISIT</p>
+   <h2 id="rajajinagar-title">Compare the Rajajinagar venues in person</h2>
+   <p>There are currently {rajajinagarVenues.length} published Rajajinagar listings on RiteVenue. Use the same event date, guest count and schedule when asking each venue for details. A stated capacity is only a starting point: ask to see the ceremony and dining layouts for your expected number of guests.</p>
+   <div className="collection-area-links">{rajajinagarVenues.map(venue=><Link key={venue.slug} href={venue.publicPath}>{venue.name} <span>View listing</span></Link>)}</div>
+   <p>Before visiting, ask which spaces are included, when setup can begin, how guests reach the entrance, and what the written quote covers. Confirm current availability, rental hours and charges directly with each venue; the listings may describe different packages.</p>
+  </section>}
   <section className="collection-advice" aria-labelledby="choosing-title">
    <h2 id="choosing-title">Choosing a Bangalore wedding venue</h2>
    <p>A maximum guest number alone cannot tell you whether a ceremony, seated meal and reception fit comfortably. Ask for a layout for your actual guest count. If you need an outdoor space, confirm the covered backup area and whether it is reserved for your date.</p>
